@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn:*)",
+      "Bash(jar tf:*)",
+      "Bash(lsof:*)",
+      "Bash(psql:*)",
+      "Bash(ps:*)",
+      "Bash(curl:*)",
+      "Bash(/Volumes/osdisk/java_code/LinkInsight/docs/research/data-mgmt/数据管理-架构与详细设计.md:*)",
+      "Bash(pkill:*)",
+      "Bash(pnpm build:*)",
+      "Bash(grep:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(./bin/git-step-all.sh:*)",
+      "Bash(./bin/git-step-4-commit.sh:*)",
+      "Bash(./bin/git-step-5-push.sh:*)",
+      "Bash(wc:*)",
+      "Bash(do sleep:*)",
+      "Bash(/Volumes/osdisk/java_code/LinkInsight/bin/start-app.sh:*)",
+      "Bash(/Volumes/osdisk/java_code/LinkInsight/bin/dev-start.sh:*)",
+      "Bash(cp:*)",
+      "Bash(pnpm exec:*)",
+      "Bash(pnpm:*)",
+      "Bash(git push:*)",
+      "Bash(tail:*)",
+      "Bash(./bin/git-step-all-auto.sh:*)",
+      "Bash(find:*)"
+    ]
+  }
+}

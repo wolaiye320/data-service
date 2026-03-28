@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "discuz": {
+      "command": "mcp-server-mysql",
+      "envFile": "/Users/sougen/.mysql.env"
+    },
+    "linkinsight": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://postgres:postgres@localhost:5432/linkinsight?transaction_read_only=off"
+      ]
+    },
+    "bankdb": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://sougen@localhost:5432/bankdb?transaction_read_only=off"
+      ]
+    },
+    "figma": {
+      "url": "https://mcp.figma.com/mcp",
+      "type": "http"
+    }
+  }
+}

@@ -1,0 +1,149 @@
+---
+description: Git 提交与分支规则（简化版）
+globs:
+alwaysApply: true
+---
+
+# Git 规则（简化版）
+
+## 适用目标
+- 以 `main` 为唯一长期主分支，适配当前仓库现状（无 `develop`）。
+- 所有代码变更通过 PR 合并，禁止直接提交到受保护分支。
+
+## 重要原则
+- **重要**：不要自动提交 git 代码，除非有明确提示。
+- 提交前确保最小必要测试通过（至少覆盖本次改动影响范围）。
+- 功能性代码变更（尤其 `src/main/java`）必须同时补充并提交对应单元测试（`src/test/java`）。
+- 新增 API 或业务功能必须同时开发并提交对应前端界面（`linkinsight-web`），禁止仅完成后端而遗漏前端；纯内部 API、批处理等无用户界面的能力除外。
+- 完成修改后必须执行单元测试，再进行推送或提 PR。
+- 保持小步提交，一个提交只解决一类问题，便于审阅和回滚。
+- 禁止在 `main` 直接开发，必须从工作分支发起 PR。
+
+## 提交规范
+提交模板：`<type>(<scope>): <subject>`
+
+要求：
+1. 冒号后必须有一个空格。
+2. `subject` 使用简洁祈使句，聚焦“做了什么”。
+3. 如有多项关键变更，在提交正文补充要点列表（`-` 开头）。
+
+`type` 枚举：
+- `feat`: 新增功能
+- `fix`: 修复缺陷
+- `docs`: 文档变更
+- `style`: 代码格式调整（不影响运行）
+- `refactor`: 重构（非新增功能、非缺陷修复）
+- `perf`: 性能优化
+- `test`: 测试相关
+- `chore`: 构建/工具/流程维护
+- `revert`: 回滚提交
+- `build`: 构建与打包变更
+
+示例：
+```text
+feat(web): add quality tickets page
+
+- add tickets list query and pagination
+- add status filter and assignee filter
+- add basic empty-state handling
+```
+
+## 分支模型
+- `main`：生产就绪分支（长期存在，受保护）。
+- `feature/*`：日常功能与一般修复分支，来源 `main`，回合并 `main`。
+- `hotfix/*`：线上紧急修复分支，来源 `main`，回合并 `main`。
+- `release/*`：按需创建的发布准备分支（可选），来源 `main`，回合并 `main`。
+
+命名约定：
+
+| 分支类型   | 命名格式                         | 示例                              |
+| ---------- | -------------------------------- | --------------------------------- |
+| 功能分支   | `feature/[issue-id]-[描述]`      | `feature/123-quality-ticket-api`  |
+| 修复分支   | `feature/[issue-id]-[描述]`      | `feature/456-fix-login-timeout`   |
+| 热修复分支 | `hotfix/vX.Y.Z-[描述]`           | `hotfix/v1.2.1-auth-null-check`   |
+| 发布分支   | `release/vX.Y.Z`                 | `release/v1.3.0`                  |
+
+说明：
+- 统一使用 `feature/*` 承载日常开发与普通缺陷修复，不再使用 `bugfix/*` / `fix/*` 作为分支前缀，避免冲突。
+
+## Pull Request 规则
+1. 所有变更必须通过 PR 合并。
+2. 至少 1 个 Reviewer 批准。
+3. CI/检查项必须通过。
+4. 合并前分支需与目标分支保持最新。
+5. 合并后删除源分支（保留审计记录即可）。
+
+## 合并策略
+- 默认使用 `Squash and merge`，保持 `main` 历史整洁。
+- 一个 PR 聚焦一个主题，避免混入无关改动。
+- 严禁 `force push` 到受保护分支。
+
+## 分支保护建议（main）
+- 要求 PR 审核通过后才能合并。
+- 要求状态检查通过。
+- 要求分支与目标分支最新。
+- 禁止强制推送。
+- 禁止删除保护分支。
+
+## AI 主动提示规则（强制）
+- 当用户进入开发实现阶段且当前分支为 `main` 时，AI 必须先提示创建功能分支（建议：`feature/[issue-id]-[desc]`）。
+- 当用户表达“完成开发/准备提测/准备上线/准备合并”时，AI 必须主动提示合并前置流程：
+  1. 同步目标分支最新代码。
+  2. 执行本地检查与测试（含 pre-commit / pre-push gate）。
+  3. 推送 feature 分支并创建 PR。
+  4. 审核通过后再合并到 `main`。
+- 若检测到在 `main` 上存在工作区改动，AI 必须优先提示切换到 feature 分支后继续。
+- 在用户未明确要求时，AI 不得直接执行合并到 `main` 的操作。
+
+## 轻量强约束脚本（本仓库）
+- Hook 目录：`/.githooks`
+- 审阅脚本：`/scripts/git-review.sh`
+
+首次启用（本地仓库执行一次）：
+1. `git config core.hooksPath .githooks`
+2. `chmod +x .githooks/* scripts/git-review.sh`
+
+执行时机：
+- `commit-msg`：校验提交信息格式（Conventional Commits）。
+- `pre-commit`：校验暂存区（敏感文件、冲突标记、超大文件）。
+- `pre-push`：按改动范围执行最小验证（后端模块单元测试 / 前端 build），并对 `src/main/java` 改动执行“同模块测试改动”门禁。
+- `git-review.sh`：人工审阅辅助输出（状态、diffstat、风险关键词）。
+- `bin/git-check.sh`：一键执行检查（默认 review + pre-commit，`--push-gate` 启用更严格检查）。
+- `bin/git-step-0~5-*.sh`：编号式提交流程脚本，按数字顺序执行。
+- `bin/git-step-3b-draft-msg.sh`：基于暂存区生成提交信息草稿（可单独执行，默认由 step-3 调用）。
+- `bin/git-step-all.sh`：串联 1->5，提交与推送均通过交互确认后执行。
+
+## 版本管理（语义化版本）
+- `MAJOR`：不兼容变更
+- `MINOR`：向后兼容的新功能
+- `PATCH`：向后兼容的问题修复
+
+## 何时创建 `release/*` 分支（判定规则）
+默认不创建 `release/*`，仅在需要发布冻结窗口时创建。按以下规则判断：
+
+- 任一条件满足，则**创建** `release/*`：
+  1. 本次发布包含多个功能/模块，需要集中回归验证。
+  2. 需要“代码冻结”以保障验收、预发、生产发布节奏。
+  3. 需要将“发布准备修复”与“新需求开发”隔离。
+  4. 存在外部评审/客户验收窗口，要求发布包稳定不再引入新功能。
+
+- 全部条件不满足，则**不创建** `release/*`：
+  1. 仅小范围改动（单功能或少量缺陷修复）。
+  2. 可直接通过 `feature/*` -> PR -> `main` 完成上线。
+  3. 无明确冻结窗口与集中验收需求。
+
+## 发布与热修复流程（简化）
+发布流程（可选 `release/*`）：
+1. 从 `main` 创建 `release/vX.Y.Z`（如需要发布冻结窗口）。
+2. 仅允许发布相关修复与文档调整，不新增需求。
+3. PR 合并到 `main`，打 `vX.Y.Z` 标签。
+4. 删除 `release/*` 分支。
+
+热修复流程：
+1. 从 `main` 创建 `hotfix/vX.Y.Z-[描述]`。
+2. 修复并验证问题，更新 `PATCH` 版本。
+3. PR 合并到 `main`，打 `vX.Y.Z` 标签。
+4. 删除 `hotfix/*` 分支。
+
+
+
