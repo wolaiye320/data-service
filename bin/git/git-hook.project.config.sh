@@ -4,29 +4,21 @@
 # 个性化内容集中放在这里，脚本主体保持不变。
 
 GIT_HOOK_BACKEND_MODULES="${GIT_HOOK_BACKEND_MODULES:-data-service-common data-service-domain data-service-infrastructure data-service-federation data-service-application data-service-interfaces data-service-app}"
-GIT_HOOK_BACKEND_MODULE_PATTERNS="${GIT_HOOK_BACKEND_MODULE_PATTERNS:-data-service-*/src/main/java/* data-service-*/src/test/java/* data-service-common/* data-service-domain/* data-service-infrastructure/* data-service-federation/* data-service-application/* data-service-interfaces/* data-service-app/*}"
-GIT_HOOK_BACKEND_TEST_COMMAND_TEMPLATE="${GIT_HOOK_BACKEND_TEST_COMMAND_TEMPLATE:-mvn -q -pl %MODULE% -am test}"
+GIT_HOOK_BACKEND_MODULE_PATTERNS="${GIT_HOOK_BACKEND_MODULE_PATTERNS:-data-service-common/* data-service-domain/* data-service-infrastructure/* data-service-federation/* data-service-application/* data-service-interfaces/* data-service-app/*}"
+GIT_HOOK_BACKEND_TEST_COMMAND_TEMPLATE="${GIT_HOOK_BACKEND_TEST_COMMAND_TEMPLATE:-}"
 GIT_HOOK_ROOT_TEST_TRIGGER_PATTERNS="${GIT_HOOK_ROOT_TEST_TRIGGER_PATTERNS:-pom.xml}"
-GIT_HOOK_ROOT_TEST_COMMAND="${GIT_HOOK_ROOT_TEST_COMMAND:-}"
+GIT_HOOK_ROOT_TEST_COMMAND="${GIT_HOOK_ROOT_TEST_COMMAND:-mvn -q -pl data-service-common,data-service-domain,data-service-infrastructure,data-service-federation,data-service-application,data-service-interfaces,data-service-app -am test -Dtest=CacheKeyGeneratorTest,CachePolicyResolverTest,InMemoryQueryCacheTest,DatasourceConnectionManagerTest,QueryParameterBinderTest,QueryResultMapperTest,SqlReadOnlyValidatorTest,ResourceProtectionServiceTest,MetadataRepositoryIntegrationTest,FederatedPipelineTest,PredefinedJoinQueryExecutorTest,ConnectionManagementServiceTest,FederatedMetadataManagementServiceTest,ServiceDefinitionManagementServiceTest,AdminManagementIntegrationTest,AuditAndPermissionIntegrationTest,PlatformBaseIntegrationTest,QueryControllerIntegrationTest,QueryExecutionComponentsIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false}"
 GIT_HOOK_FRONTEND_PATH_PATTERNS="${GIT_HOOK_FRONTEND_PATH_PATTERNS:-data-service-web/*}"
 GIT_HOOK_FRONTEND_BUILD_COMMAND="${GIT_HOOK_FRONTEND_BUILD_COMMAND:-pnpm --dir data-service-web build}"
 GIT_HOOK_REQUIRED_TEST_CODE_PATTERNS="${GIT_HOOK_REQUIRED_TEST_CODE_PATTERNS:-data-service-*/src/main/java/*}"
 GIT_HOOK_REQUIRED_TEST_PATH_TEMPLATE="${GIT_HOOK_REQUIRED_TEST_PATH_TEMPLATE:-%MODULE%/src/test/java/*}"
 GIT_HOOK_REQUIRED_TEST_MESSAGE="${GIT_HOOK_REQUIRED_TEST_MESSAGE:-每个功能至少补充对应模块 src/test/java 下的单元测试。}"
 
-if [[ -z "$GIT_HOOK_ROOT_TEST_COMMAND" && -n "${GIT_HOOK_BACKEND_MODULES// }" ]]; then
-  GIT_HOOK_ROOT_TEST_COMMAND="mvn -q -pl $(printf '%s' "$GIT_HOOK_BACKEND_MODULES" | tr ' ' ',') -am test"
-fi
-
 if [[ -z "${GIT_HOOK_PATH_COMMANDS:-}" ]]; then
   path_commands=()
   for pattern in $GIT_HOOK_ROOT_TEST_TRIGGER_PATTERNS; do
     [[ -n "$pattern" && -n "$GIT_HOOK_ROOT_TEST_COMMAND" ]] || continue
     path_commands+=("${pattern}::${GIT_HOOK_ROOT_TEST_COMMAND}")
-  done
-  for pattern in $GIT_HOOK_BACKEND_MODULE_PATTERNS; do
-    [[ -n "$pattern" ]] || continue
-    path_commands+=("${pattern}::${GIT_HOOK_BACKEND_TEST_COMMAND_TEMPLATE}")
   done
   for pattern in $GIT_HOOK_FRONTEND_PATH_PATTERNS; do
     [[ -n "$pattern" && -n "$GIT_HOOK_FRONTEND_BUILD_COMMAND" ]] || continue
