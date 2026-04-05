@@ -6,8 +6,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class FederatedSqlParser {
+
+    private static final Pattern SELECT_PATTERN = Pattern.compile("(?is)^SELECT\\s+(.*?)\\s+FROM\\s+(.*)$");
+    private static final Pattern WHERE_PATTERN = Pattern.compile("(?is)^(.*?)(?:\\s+WHERE\\s+(.*))?$");
 
     public FederatedParsedQuery parse(String sql) {
         if (sql == null || sql.isBlank()) {
@@ -20,16 +25,21 @@ public class FederatedSqlParser {
             throw new IllegalArgumentException("only SELECT statements are supported");
         }
 
-        int fromIndex = upperSql.indexOf(" FROM ");
-        if (fromIndex < 0) {
+        Matcher selectMatcher = SELECT_PATTERN.matcher(normalizedSql);
+        if (!selectMatcher.matches()) {
             throw new IllegalArgumentException("sql must contain FROM clause");
         }
 
-        String fieldPart = normalizedSql.substring("SELECT ".length(), fromIndex).trim();
-        String afterFrom = normalizedSql.substring(fromIndex + " FROM ".length()).trim();
-        int whereIndex = afterFrom.toUpperCase(Locale.ROOT).indexOf(" WHERE ");
-        String sourcePart = whereIndex >= 0 ? afterFrom.substring(0, whereIndex).trim() : afterFrom;
-        String whereClause = whereIndex >= 0 ? afterFrom.substring(whereIndex + " WHERE ".length()).trim() : "";
+        String fieldPart = selectMatcher.group(1).trim();
+        String afterFrom = selectMatcher.group(2).trim();
+        Matcher whereMatcher = WHERE_PATTERN.matcher(afterFrom);
+        String sourcePart = afterFrom;
+        String whereClause = "";
+        if (whereMatcher.matches()) {
+            sourcePart = whereMatcher.group(1).trim();
+            String parsedWhereClause = whereMatcher.group(2);
+            whereClause = parsedWhereClause == null ? "" : parsedWhereClause.trim();
+        }
 
         List<String> selectedFields = Arrays.stream(fieldPart.split(","))
             .map(String::trim)

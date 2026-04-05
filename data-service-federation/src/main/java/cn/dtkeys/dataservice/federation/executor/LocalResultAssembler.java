@@ -2,17 +2,21 @@ package cn.dtkeys.dataservice.federation.executor;
 
 import cn.dtkeys.dataservice.federation.model.ExecutionStageResult;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 public class LocalResultAssembler {
 
-    public List<Map<String, Object>> assemble(List<ExecutionStageResult> stageResults) {
-        List<Map<String, Object>> mergedRows = new ArrayList<>();
+    public FederatedExecutionBuffer assemble(List<ExecutionStageResult> stageResults,
+                                             FederatedExecutionOptions executionOptions) {
+        FederatedExecutionBuffer buffer = new FederatedExecutionBuffer(
+            executionOptions.previewRows(),
+            executionOptions.maxResultRows(),
+            executionOptions.inMemoryBudgetRows()
+        );
         for (ExecutionStageResult stageResult : stageResults) {
-            mergedRows.addAll(stageResult.rows());
+            buffer.appendRows(stageResult.rows());
         }
-        return mergedRows;
+        return buffer;
     }
 }

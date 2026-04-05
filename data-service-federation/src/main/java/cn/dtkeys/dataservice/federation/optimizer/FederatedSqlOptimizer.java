@@ -25,7 +25,22 @@ public class FederatedSqlOptimizer {
         if (projectPushdownApplied) {
             optimizationDecisions.add("project pushdown applied on all stages");
         }
+        if (Boolean.TRUE.equals(plan.statisticsSummary().get("statisticsMissing"))) {
+            optimizationDecisions.add("heuristic fallback applied because statistics are missing");
+        }
+        if (optimizedStages.stream().anyMatch(FederatedPlanStage::dynamicFilterEnabled)) {
+            optimizationDecisions.add("dynamic filtering enabled for dependent stages");
+        }
 
-        return new FederatedPlan(plan.originalSql(), optimizedStages, plan.logicalPlan(), optimizationDecisions);
+        return new FederatedPlan(
+            plan.originalSql(),
+            optimizedStages,
+            plan.logicalPlan(),
+            optimizationDecisions,
+            plan.statisticsSummary(),
+            plan.costSummary(),
+            plan.datasourceScope(),
+            plan.executionProfile()
+        );
     }
 }

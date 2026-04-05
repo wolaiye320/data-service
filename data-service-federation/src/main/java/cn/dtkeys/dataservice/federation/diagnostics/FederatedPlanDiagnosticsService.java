@@ -21,10 +21,19 @@ public class FederatedPlanDiagnosticsService {
             } else {
                 fallbackReasons.add(stage.stageId() + ": filter not pushed down");
             }
+            if (stage.dynamicFilterEnabled()) {
+                pushdownSummary.add(stage.stageId() + ": dynamic filter field = " + stage.dynamicFilterField());
+            }
+            if (!stage.dependsOnStageIds().isEmpty()) {
+                stagePlan.add(stage.stageId() + ": dependsOn = " + String.join(",", stage.dependsOnStageIds()));
+            }
         }
 
         if (plan.optimizationDecisions().stream().noneMatch(item -> item.contains("project pushdown"))) {
             fallbackReasons.add("project pushdown not applied");
+        }
+        if (plan.optimizationDecisions().stream().anyMatch(item -> item.contains("heuristic fallback"))) {
+            fallbackReasons.add("statistics missing, heuristic fallback enabled");
         }
 
         return new FederatedDiagnostics(plan.logicalPlan(), stagePlan, pushdownSummary, fallbackReasons);

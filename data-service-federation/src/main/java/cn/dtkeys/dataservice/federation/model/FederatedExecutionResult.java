@@ -5,6 +5,7 @@ import java.util.Map;
 
 public record FederatedExecutionResult(
     List<ExecutionStageResult> stageResults,
-    List<Map<String, Object>> mergedRows
+    List<Map<String, Object>> mergedRows,
+    Map<String, Object> executionSummary
 ) {
 }

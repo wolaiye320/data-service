@@ -6,6 +6,8 @@ import java.util.Map;
 public record ExecutionStageResult(
     String stageId,
     String source,
-    List<Map<String, Object>> rows
+    String executedSql,
+    List<Map<String, Object>> rows,
+    Map<String, Object> executionSummary
 ) {
 }

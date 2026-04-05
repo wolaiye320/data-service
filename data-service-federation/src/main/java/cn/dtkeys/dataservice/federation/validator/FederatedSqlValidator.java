@@ -7,6 +7,7 @@ import cn.dtkeys.dataservice.federation.model.ValidationResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -44,9 +45,12 @@ public class FederatedSqlValidator {
             warnings.add("join query detected, optimizer will evaluate pushdown and fallback");
         }
 
-        if (errors.isEmpty()) {
-            return ValidationResult.success(warnings, query.sourceTables());
-        }
-        return ValidationResult.failure(errors, warnings, query.sourceTables());
+        Map<String, Object> details = Map.of(
+            "parse", Map.of("result", "PASS", "recognizedSources", query.sourceTables()),
+            "semantic", Map.of("result", errors.isEmpty() ? "PASS" : "FAIL", "warnings", warnings),
+            "capability", Map.of("result", warnings.isEmpty() ? "PASS" : "WARN", "warningCount", warnings.size())
+        );
+
+        return ValidationResult.of(errors.isEmpty(), errors, warnings, query.sourceTables(), details);
     }
 }
