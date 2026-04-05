@@ -4,17 +4,19 @@
       "command": "mcp-server-mysql",
       "envFile": "/Users/sougen/.mysql.env"
     },
-    "linkinsight": {
-      "command": "npx",
+    "data_service": {
+      "command": "/Users/sougen/.nvm/versions/node/v22.22.1/bin/node",
       "args": [
+        "/Users/sougen/.nvm/versions/node/v22.22.1/lib/node_modules/npm/bin/npx-cli.js",
         "-y",
         "@modelcontextprotocol/server-postgres",
-        "postgresql://postgres:postgres@localhost:5432/linkinsight?transaction_read_only=off"
+        "postgresql://postgres:postgres@localhost:5432/data_service?transaction_read_only=off"
       ]
     },
     "bankdb": {
-      "command": "npx",
+      "command": "/Users/sougen/.nvm/versions/node/v22.22.1/bin/node",
       "args": [
+        "/Users/sougen/.nvm/versions/node/v22.22.1/lib/node_modules/npm/bin/npx-cli.js",
         "-y",
         "@modelcontextprotocol/server-postgres",
         "postgresql://sougen@localhost:5432/bankdb?transaction_read_only=off"
