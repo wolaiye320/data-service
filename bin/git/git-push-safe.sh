@@ -85,8 +85,8 @@ if [[ -z "$branch" ]]; then
 fi
 
 if [[ "$skip_hook" == "false" ]]; then
-  if run_optional_project_hook pre-push; then
-    :
+  if [[ -x "$PROJECT_ROOT/.githooks/pre-push" ]]; then
+    run_optional_project_hook pre-push
   else
     echo "[git-push] .githooks/pre-push not found, skip hook."
   fi
