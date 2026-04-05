@@ -1,3 +1,16 @@
 spring:
-  profiles:
-    active: prod
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${DATA_SERVICE_DB_URL:jdbc:postgresql://localhost:5432/data_service}
+    username: ${DATA_SERVICE_DB_USERNAME:postgres}
+    password: ${DATA_SERVICE_DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+logging:
+  level:
+    root: INFO
+    cn.dtkeys.dataservice: INFO

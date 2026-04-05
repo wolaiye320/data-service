@@ -1,3 +1,15 @@
 spring:
-  profiles:
-    active: local
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:postgresql://localhost:5432/data_service
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+logging:
+  level:
+    cn.dtkeys.dataservice: DEBUG

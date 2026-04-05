@@ -1,3 +1,31 @@
 spring:
   application:
     name: data-service
+  profiles:
+    default: local
+server:
+  port: 8081
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} traceId=%X{traceId} - %msg%n"
+data-service:
+  access:
+    operator-header: X-Operator
+    role-header: X-Operator-Role
+  runtime:
+    port: 8081
+    default-profile: local
+  resource-protection:
+    query-timeout-seconds: 30
+    federated-query-timeout-seconds: 60
+    max-batch-size: 100
+    max-result-rows: 1000
+    max-concurrent-queries: 8
