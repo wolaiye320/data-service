@@ -1,4 +1,9 @@
 **/target/
 **/build/
 **/out/
+**/node_modules/
+**/dist/
+**/test-results/
+**/*.tsbuildinfo
+logs/
 .DS_Store
