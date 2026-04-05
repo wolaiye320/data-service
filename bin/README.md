@@ -1,18 +1,30 @@
-# data-service 脚本说明
+# bin 目录说明
 
-## 当前范围
+`bin/` 存放 `data-service` 的本地启动、停止、重启、联邦模块测试和 Git 辅助脚本。
 
-- `bin/` 当前只维护 `data-service-app` 后端相关脚本。
-- 默认 Spring Profile 为 `local`，生产模式使用 `prod`。
-- 当前仓库没有可直接启动的前端工程，旧的前端启动/停止逻辑已移除。
-- 当前 [DataServiceApplication.java](/Volumes/osdisk/java_code/data-service/data-service-app/src/main/java/cn/dtkeys/dataservice/app/DataServiceApplication.java) 还没有补齐 Spring Boot 启动入口；若启动失败，先完善该类。
+## 1. 目录内容
 
-## 前置条件
+| 路径 | 作用 |
+| --- | --- |
+| `bin/start.sh` | 启动 `data-service-app`，支持 `local` / `prod` 模式 |
+| `bin/stop.sh` | 停止占用 `8081` 端口的后端进程 |
+| `bin/restart.sh` | 先停再启，复用 `start.sh` / `stop.sh` 参数 |
+| `bin/start-app.sh` | 清理并打包 `data-service-app`，以前台方式启动 |
+| `bin/test-federation.sh` | 清理并执行 `data-service-federation` 模块指定测试 |
+| `bin/git/` | Git 提交、校验、推送辅助脚本，详见 `bin/git/README.md` |
 
-- JDK 17+
-- Maven 3.9+
+## 2. 前置条件
 
-## 启动与停止
+| 项目 | 要求 |
+| --- | --- |
+| Java | JDK 21+ |
+| Maven | Maven 3.9+ |
+| 数据库 | 本地 PostgreSQL 已就绪，`data-service-app` 可正常连接 |
+| 端口 | 本地 `8081` 未被其他进程占用 |
+
+## 3. 启动与停止
+
+### 3.1 `start.sh`
 
 ```bash
 # 本地模式（默认）
@@ -20,74 +32,119 @@
 
 # 显式指定本地模式
 ./bin/start.sh --local
-
-# 兼容旧参数，等同 --local
 ./bin/start.sh --dev
 
-# 生产模式
+# 生产模式：先 package，再 java -jar 启动
 ./bin/start.sh --prod
 
-# 停止后端
-./bin/stop.sh
+# 兼容参数，当前项目仅维护后端进程
+./bin/start.sh --backend-only
+```
 
-# 重启后端
+说明：
+
+| 项目 | 内容 |
+| --- | --- |
+| 本地模式 | 执行 `mvn -f data-service-app/pom.xml spring-boot:run`，使用 `local` profile |
+| 生产模式 | 执行 `mvn -pl data-service-app -am package -DskipTests`，再启动 JAR |
+| 日志 | 后端输出写入 `logs/backend.log` |
+| 就绪判断 | 轮询 `8081` 端口，最长等待 30 秒 |
+| 不支持项 | `--frontend-only` 会直接失败，因为当前项目没有由该脚本管理的前端进程 |
+
+### 3.2 `stop.sh`
+
+```bash
+./bin/stop.sh
+./bin/stop.sh --backend-only
+```
+
+说明：
+
+| 项目 | 内容 |
+| --- | --- |
+| 停止范围 | 强制停止占用 `8081` 端口的进程 |
+| 不支持项 | `--frontend-only` 会直接失败 |
+
+### 3.3 `restart.sh`
+
+```bash
 ./bin/restart.sh
 ./bin/restart.sh --prod
+./bin/restart.sh --backend-only
 ```
 
 说明：
-- `./bin/dev-start.sh`：使用 `mvn -pl data-service-app -am spring-boot:run` 直接启动本地环境。
-- `./bin/start-app.sh`：先打包 `data-service-app`，再以 `java -jar` 启动 `local` profile。
-- 默认端口按应用配置执行；当前未显式配置时，Spring Boot 默认使用 `8080`。
 
-## 日志
+| 项目 | 内容 |
+| --- | --- |
+| 行为 | 先执行 `stop.sh`，等待 2 秒，再执行 `start.sh` |
+| 参数 | 透传给 `stop.sh` 和 `start.sh` |
 
-- `logs/backend.log`：后端 stdout/stderr
-
-## 生产模式构建
+### 3.4 `start-app.sh`
 
 ```bash
-mvn -pl data-service-app -am package -DskipTests
-```
+./bin/start-app.sh
 
-产物路径：
-
-```bash
-data-service-app/target/data-service-app-*.jar
-```
-
-## Git 辅助脚本
-
-```bash
-# 审阅摘要 + pre-commit 检查
-./bin/git-check.sh
-
-# 附加执行 pre-push gate
-./bin/git-check.sh --push-gate
-
-# 仅查看审阅摘要
-./bin/git-check.sh --review-only
-
-# 查看推荐提交流程
-./bin/git-step-0-sequence.sh
-
-# 一键串联 review -> stage -> check -> commit -> push
-./bin/git-step-all.sh <path...>
-
-# 非交互式串联
-./bin/git-step-all-auto.sh <path...>
-./bin/git-step-all-auto.sh --auto-push <path...>
-./bin/git-step-all-auto.sh --auto-push --skip-tests <path...>
-```
-
-首次启用 hooks：
-
-```bash
-git config core.hooksPath .githooks
-chmod +x .githooks/* bin/*.sh bin/lib/*.sh
+# 追加 Spring Boot 参数
+./bin/start-app.sh --server.port=8081
 ```
 
 说明：
-- `git-step-3b-draft-msg.sh` 已按 `data-service-*` 模块生成 scope。
-- `git-check.sh` 不再依赖旧项目的 `scripts/git-review.sh`。
-- 如果仓库中尚未提供 `.githooks/pre-commit` 或 `.githooks/pre-push`，脚本会提示并跳过对应 gate。
+
+| 项目 | 内容 |
+| --- | --- |
+| 构建方式 | 先 `clean`，再 `package -DskipTests` |
+| 启动方式 | 以前台方式执行 `java -jar` |
+| 默认 profile | `local` |
+| 适用场景 | 本地手工调试，需要看到实时控制台输出时使用 |
+
+## 4. 联邦模块测试
+
+### 4.1 `test-federation.sh`
+
+```bash
+./bin/test-federation.sh
+```
+
+说明：
+
+| 项目 | 内容 |
+| --- | --- |
+| 清理范围 | 删除 `data-service-federation/target` |
+| 执行测试 | `PredefinedJoinQueryExecutorTest`、`FederatedPipelineTest` |
+| Maven 命令 | `mvn -pl data-service-federation -am test ...` |
+| 适用场景 | 联邦执行器、预定义 Join、联邦管线改动后的定向验证 |
+
+## 5. Git 辅助脚本
+
+常用入口：
+
+```bash
+./bin/git/git-guide.sh
+./bin/git/git-review.sh
+./bin/git/git-stage.sh <path...>
+./bin/git/git-prepare-commit.sh
+./bin/git/git-commit-staged.sh --from-draft
+./bin/git/git-push-safe.sh --remote origin --branch <branch>
+```
+
+完整说明见：
+
+| 文档 | 作用 |
+| --- | --- |
+| `bin/git/README.md` | Git 脚本用途、依赖关系、推荐流程 |
+
+## 6. 运行文件与日志
+
+| 路径 | 作用 |
+| --- | --- |
+| `logs/backend.log` | `start.sh` 启动的后端日志 |
+| `data-service-app/target/data-service-app-*.jar` | `--prod` 或 `start-app.sh` 生成的可执行包 |
+
+## 7. 注意事项
+
+| 项目 | 说明 |
+| --- | --- |
+| 项目定位 | 当前 `bin` 目录只维护后端运行脚本，不再描述旧项目的前后端双进程模式 |
+| 项目名称 | 一律使用 `data-service`，不再使用历史名称 `LinkInsight` |
+| 脚本边界 | `bin/README.md` 只说明 `bin` 目录现有脚本，不记录通用优化方案或与当前仓库无关的流程 |
