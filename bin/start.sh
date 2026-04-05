@@ -9,7 +9,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 APP_MODULE="data-service-app"
-BACKEND_PORT=8080
+BACKEND_PORT=8081
 MODE="local"
 BACKEND_ONLY=false
 FRONTEND_ONLY=false
@@ -61,6 +61,11 @@ build_prod_jar() {
   mvn -pl "$APP_MODULE" -am package -DskipTests -q
 }
 
+compile_local_modules() {
+  echo "[后端] 预编译 ${APP_MODULE} 及其依赖模块 ..."
+  mvn -pl "$APP_MODULE" -am compile test-compile -DskipTests -q
+}
+
 find_prod_jar() {
   find "${APP_MODULE}/target" -maxdepth 1 -type f -name "${APP_MODULE}-*.jar" | sort | head -n 1
 }
@@ -80,7 +85,8 @@ start_backend() {
     nohup java -jar "$jar_path" --spring.profiles.active=prod \
       > logs/backend.log 2>&1 &
   else
-    nohup mvn -pl "$APP_MODULE" -am spring-boot:run \
+    compile_local_modules
+    nohup mvn -f "${APP_MODULE}/pom.xml" spring-boot:run \
       -Dspring-boot.run.profiles=local \
       -Dspring-boot.run.jvmArguments="-Dfile.encoding=UTF-8" \
       > logs/backend.log 2>&1 &

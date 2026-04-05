@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-BACKEND_PORT=8080
+BACKEND_PORT=8081
 BACKEND_ONLY=false
 FRONTEND_ONLY=false
 
@@ -14,7 +14,7 @@ for arg in "$@"; do
     --frontend-only) FRONTEND_ONLY=true ;;
     -h|--help)
       echo "用法: $0 [--backend-only]"
-      echo "  停止 data-service 后端(8080)"
+      echo "  停止 data-service 后端(8081)"
       exit 0
       ;;
     *)
