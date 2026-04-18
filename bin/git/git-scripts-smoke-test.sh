@@ -18,6 +18,8 @@ git init --bare "$remote_repo" >/dev/null
 git init "$test_repo" >/dev/null
 
 cp "$PROJECT_ROOT/bin/git/git-stage.sh" "$test_repo/bin/git/"
+cp "$PROJECT_ROOT/bin/git/git-prepare-commit.sh" "$test_repo/bin/git/"
+cp "$PROJECT_ROOT/bin/git/git-workflow-auto.sh" "$test_repo/bin/git/"
 cp "$PROJECT_ROOT/bin/git/git-draft-commit-message.sh" "$test_repo/bin/git/"
 cp "$PROJECT_ROOT/bin/git/git-commit-staged.sh" "$test_repo/bin/git/"
 cp "$PROJECT_ROOT/bin/git/git-push-safe.sh" "$test_repo/bin/git/"
@@ -40,6 +42,16 @@ chmod +x "$test_repo/bin/git/"*.sh "$test_repo/bin/git/lib/"*.sh
   ./bin/git/git-draft-commit-message.sh --scope repo --type chore --subject "verify reusable git scripts" >/dev/null
   ./bin/git/git-commit-staged.sh --from-draft >/dev/null
   ./bin/git/git-push-safe.sh --skip-hook --before-push-cmd "git status --short >/dev/null" --remote origin --branch "$(git rev-parse --abbrev-ref HEAD)" >/dev/null
+
+  cat <<'EOF' > ./bin/git/git-check.sh
+#!/usr/bin/env bash
+set -euo pipefail
+exit 0
+EOF
+  chmod +x ./bin/git/git-check.sh
+
+  printf 'workflow\n' > README.md
+  ./bin/git/git-workflow-auto.sh --auto-push README.md >/dev/null
 )
 
 echo "git scripts smoke test passed"

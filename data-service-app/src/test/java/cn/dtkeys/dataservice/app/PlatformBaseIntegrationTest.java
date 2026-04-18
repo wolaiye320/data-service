@@ -43,4 +43,16 @@ class PlatformBaseIntegrationTest {
             .andExpect(jsonPath("$.data.cacheMetrics.missCount").value(0))
             .andExpect(jsonPath("$.data.cacheMetrics.hitRate").value(0.0));
     }
+
+    @Test
+    void shouldReturnNotFoundForRootPath() throws Exception {
+        mockMvc.perform(get("/")
+                .accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isNotFound())
+            .andExpect(header().exists("X-Trace-Id"))
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+            .andExpect(jsonPath("$.message").value("请求资源不存在"))
+            .andExpect(jsonPath("$.meta.traceId").isNotEmpty());
+    }
 }

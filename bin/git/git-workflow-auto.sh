@@ -105,7 +105,7 @@ fi
 
 echo
 echo "[3/5] 校验并生成草稿"
-./bin/git/git-prepare-commit.sh "${draft_args[@]}"
+./bin/git/git-prepare-commit.sh "${draft_args[@]+"${draft_args[@]}"}"
 
 echo
 echo "[4/5] 使用草稿提交"
@@ -124,10 +124,10 @@ fi
 if [[ -n "$branch" ]]; then
   push_args+=(--branch "$branch")
 fi
-for cmd in "${before_push_cmds[@]}"; do
+for cmd in "${before_push_cmds[@]+"${before_push_cmds[@]}"}"; do
   push_args+=(--before-push-cmd "$cmd")
 done
 
 echo
 echo "[5/5] 推送到远程"
-./bin/git/git-push-safe.sh "${push_args[@]}"
+./bin/git/git-push-safe.sh "${push_args[@]+"${push_args[@]}"}"

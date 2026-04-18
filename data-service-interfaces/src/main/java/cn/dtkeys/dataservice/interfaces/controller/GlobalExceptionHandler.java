@@ -14,6 +14,7 @@ import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -67,6 +68,15 @@ public class GlobalExceptionHandler {
         };
         log.warn("validation_exception path={} message={}", request.getRequestURI(), message);
         return ResponseEntity.badRequest().body(ApiResponse.failure(ErrorCode.PARAM_INVALID, message, buildMeta()));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(NoResourceFoundException exception,
+                                                                   HttpServletRequest request) {
+        log.warn("resource_not_found path={} message={}", request.getRequestURI(), exception.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(ApiResponse.failure(ErrorCode.RESOURCE_NOT_FOUND, ErrorCode.RESOURCE_NOT_FOUND.defaultMessage(),
+                buildMeta()));
     }
 
     @ExceptionHandler(Exception.class)

@@ -60,7 +60,7 @@ echo "[2/5] 暂存变更"
 
 echo
 echo "[3/5] 校验并生成草稿"
-./bin/git/git-prepare-commit.sh "${draft_args[@]}"
+./bin/git/git-prepare-commit.sh "${draft_args[@]+"${draft_args[@]}"}"
 
 read -r -p "是否使用草稿提交？(y/N): " confirm_commit
 if [[ ! "$confirm_commit" =~ ^[Yy]$ ]]; then
@@ -99,4 +99,4 @@ fi
 
 echo
 echo "[5/5] 推送到远程"
-./bin/git/git-push-safe.sh "${push_args[@]}"
+./bin/git/git-push-safe.sh "${push_args[@]+"${push_args[@]}"}"

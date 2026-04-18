@@ -5,6 +5,7 @@
 set -euo pipefail
 
 BACKEND_PORT=8081
+FRONTEND_PORT=3001
 BACKEND_ONLY=false
 FRONTEND_ONLY=false
 
@@ -13,8 +14,8 @@ for arg in "$@"; do
     --backend-only) BACKEND_ONLY=true ;;
     --frontend-only) FRONTEND_ONLY=true ;;
     -h|--help)
-      echo "用法: $0 [--backend-only]"
-      echo "  停止 data-service 后端(8081)"
+      echo "用法: $0 [--backend-only|--frontend-only]"
+      echo "  停止 data-service 后端(8081) 与前端(3001)"
       exit 0
       ;;
     *)
@@ -24,8 +25,8 @@ for arg in "$@"; do
   esac
 done
 
-if [[ "$FRONTEND_ONLY" == "true" ]]; then
-  echo "当前项目未提供可停止的前端进程"
+if [[ "$BACKEND_ONLY" == "true" && "$FRONTEND_ONLY" == "true" ]]; then
+  echo "--backend-only 与 --frontend-only 不能同时使用"
   exit 1
 fi
 
@@ -43,5 +44,10 @@ kill_port() {
 }
 
 echo "=== data-service 停止 ==="
-kill_port "$BACKEND_PORT" "后端"
+if [[ "$FRONTEND_ONLY" != "true" ]]; then
+  kill_port "$BACKEND_PORT" "后端"
+fi
+if [[ "$BACKEND_ONLY" != "true" ]]; then
+  kill_port "$FRONTEND_PORT" "前端"
+fi
 echo "=== 停止完成 ==="

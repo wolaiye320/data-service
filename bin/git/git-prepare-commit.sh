@@ -50,4 +50,4 @@ fi
 
 echo
 echo "[git-prepare] generating commit draft"
-./bin/git/git-draft-commit-message.sh "${draft_args[@]}"
+./bin/git/git-draft-commit-message.sh "${draft_args[@]+"${draft_args[@]}"}"

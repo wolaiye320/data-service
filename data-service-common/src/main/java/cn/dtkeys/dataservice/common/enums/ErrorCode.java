@@ -7,6 +7,7 @@ public enum ErrorCode {
 
     OK("success"),
     PARAM_INVALID("请求参数不合法"),
+    RESOURCE_NOT_FOUND("请求资源不存在"),
     SERVICE_NOT_FOUND("服务不存在"),
     SERVICE_DISABLED("服务不可用"),
     SERVICE_CONFIG_INVALID("服务配置不合法"),
