@@ -1,7 +1,7 @@
 package cn.dtkeys.dataservice.app;
 
-import cn.dtkeys.dataservice.domain.model.DSAuditLog;
-import cn.dtkeys.dataservice.infrastructure.repository.DSAuditLogRepository;
+import cn.dtkeys.dataservice.audit.model.DSAuditLog;
+import cn.dtkeys.dataservice.repository.DSAuditLogRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

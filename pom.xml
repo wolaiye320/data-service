@@ -13,11 +13,7 @@
 
     <modules>
         <module>data-service-common</module>
-        <module>data-service-domain</module>
-        <module>data-service-infrastructure</module>
-        <module>data-service-federation</module>
-        <module>data-service-application</module>
-        <module>data-service-interfaces</module>
+        <module>data-service-core</module>
         <module>data-service-app</module>
     </modules>
 

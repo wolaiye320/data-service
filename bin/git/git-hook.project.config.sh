@@ -3,11 +3,11 @@
 # 项目级 hook 配置。
 # 个性化内容集中放在这里，脚本主体保持不变。
 
-GIT_HOOK_BACKEND_MODULES="${GIT_HOOK_BACKEND_MODULES:-data-service-common data-service-domain data-service-infrastructure data-service-federation data-service-application data-service-interfaces data-service-app}"
-GIT_HOOK_BACKEND_MODULE_PATTERNS="${GIT_HOOK_BACKEND_MODULE_PATTERNS:-data-service-common/* data-service-domain/* data-service-infrastructure/* data-service-federation/* data-service-application/* data-service-interfaces/* data-service-app/*}"
+GIT_HOOK_BACKEND_MODULES="${GIT_HOOK_BACKEND_MODULES:-data-service-common data-service-core data-service-app}"
+GIT_HOOK_BACKEND_MODULE_PATTERNS="${GIT_HOOK_BACKEND_MODULE_PATTERNS:-data-service-common/* data-service-core/* data-service-app/*}"
 GIT_HOOK_BACKEND_TEST_COMMAND_TEMPLATE="${GIT_HOOK_BACKEND_TEST_COMMAND_TEMPLATE:-}"
 GIT_HOOK_ROOT_TEST_TRIGGER_PATTERNS="${GIT_HOOK_ROOT_TEST_TRIGGER_PATTERNS:-pom.xml}"
-GIT_HOOK_ROOT_TEST_COMMAND="${GIT_HOOK_ROOT_TEST_COMMAND:-mvn -q -pl data-service-common,data-service-domain,data-service-infrastructure,data-service-federation,data-service-application,data-service-interfaces,data-service-app -am test -Dtest=CacheKeyGeneratorTest,CachePolicyResolverTest,InMemoryQueryCacheTest,DatasourceConnectionManagerTest,QueryParameterBinderTest,QueryResultMapperTest,SqlReadOnlyValidatorTest,ResourceProtectionServiceTest,MetadataRepositoryIntegrationTest,FederatedPipelineTest,PredefinedJoinQueryExecutorTest,ConnectionManagementServiceTest,FederatedMetadataManagementServiceTest,ServiceDefinitionManagementServiceTest,AdminManagementIntegrationTest,AuditAndPermissionIntegrationTest,PlatformBaseIntegrationTest,QueryControllerIntegrationTest,QueryExecutionComponentsIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false}"
+GIT_HOOK_ROOT_TEST_COMMAND="${GIT_HOOK_ROOT_TEST_COMMAND:-mvn -q -pl data-service-common,data-service-core,data-service-app -am test -Dtest=CacheKeyGeneratorTest,CachePolicyResolverTest,InMemoryQueryCacheTest,DatasourceConnectionManagerTest,QueryParameterBinderTest,QueryResultMapperTest,SqlReadOnlyValidatorTest,ResourceProtectionServiceTest,MetadataRepositoryIntegrationTest,FederatedPipelineTest,PredefinedJoinQueryExecutorTest,ConnectionManagementServiceTest,FederatedMetadataManagementServiceTest,ServiceDefinitionManagementServiceTest,AdminManagementIntegrationTest,AuditAndPermissionIntegrationTest,PlatformBaseIntegrationTest,QueryControllerIntegrationTest,QueryExecutionComponentsIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false}"
 GIT_HOOK_FRONTEND_PATH_PATTERNS="${GIT_HOOK_FRONTEND_PATH_PATTERNS:-data-service-web/*}"
 GIT_HOOK_FRONTEND_BUILD_COMMAND="${GIT_HOOK_FRONTEND_BUILD_COMMAND:-pnpm --dir data-service-web build}"
 GIT_HOOK_REQUIRED_TEST_CODE_PATTERNS="${GIT_HOOK_REQUIRED_TEST_CODE_PATTERNS:-data-service-*/src/main/java/*}"

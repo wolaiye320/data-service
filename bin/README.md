@@ -1,6 +1,6 @@
 # bin 目录说明
 
-`bin/` 存放 `data-service` 的本地启动、停止、重启、联邦模块测试和 Git 辅助脚本。
+`bin/` 存放 `data-service` 的本地启动、停止、重启、联邦能力测试和 Git 辅助脚本。
 
 ## 1. 目录内容
 
@@ -10,7 +10,7 @@
 | `bin/stop.sh` | 停止占用 `8081` 端口的后端进程 |
 | `bin/restart.sh` | 先停再启，复用 `start.sh` / `stop.sh` 参数 |
 | `bin/start-app.sh` | 清理并打包 `data-service-app`，以前台方式启动 |
-| `bin/test-federation.sh` | 清理并执行 `data-service-federation` 模块指定测试 |
+| `bin/test-federation.sh` | 清理并执行 `data-service-core` 中的联邦能力指定测试 |
 | `bin/git/` | Git 提交、校验、推送辅助脚本，详见 `bin/git/README.md` |
 
 ## 2. 前置条件
@@ -110,9 +110,9 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 清理范围 | 删除 `data-service-federation/target` |
+| 清理范围 | 删除 `data-service-core/target` |
 | 执行测试 | `PredefinedJoinQueryExecutorTest`、`FederatedPipelineTest` |
-| Maven 命令 | `mvn -pl data-service-federation -am test ...` |
+| Maven 命令 | `mvn -pl data-service-core -am test ...` |
 | 适用场景 | 联邦执行器、预定义 Join、联邦管线改动后的定向验证 |
 
 ## 5. Git 辅助脚本

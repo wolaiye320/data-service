@@ -1,6 +1,6 @@
 package cn.dtkeys.dataservice.app.config;
 
-import cn.dtkeys.dataservice.interfaces.security.PlatformPermissionInterceptor;
+import cn.dtkeys.dataservice.security.PlatformPermissionInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;

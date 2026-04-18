@@ -22,22 +22,7 @@
         </dependency>
         <dependency>
             <groupId>cn.dtkeys</groupId>
-            <artifactId>data-service-application</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>cn.dtkeys</groupId>
-            <artifactId>data-service-interfaces</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>cn.dtkeys</groupId>
-            <artifactId>data-service-infrastructure</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>cn.dtkeys</groupId>
-            <artifactId>data-service-federation</artifactId>
+            <artifactId>data-service-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
