@@ -18,7 +18,6 @@
         <dependency>
             <groupId>cn.dtkeys</groupId>
             <artifactId>data-service-common</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
