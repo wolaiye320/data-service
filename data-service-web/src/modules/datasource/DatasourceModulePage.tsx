@@ -12,7 +12,6 @@ import {
   Space,
   Spin,
   Table,
-  Tag,
   Typography,
 } from 'antd'
 import {
@@ -48,14 +47,14 @@ const DB_TYPE_PORT: Record<string, number> = {
   ORACLE: 1521,
 }
 
-function prettyStatus(status: string) {
+function renderStatusText(status: string) {
   if (status === 'ENABLED') {
-    return <Tag color="success">已启用</Tag>
+    return <span className="status-text-success">已启用</span>
   }
   if (status === 'DISABLED') {
-    return <Tag color="default">已停用</Tag>
+    return <span className="status-text">已停用</span>
   }
-  return <Tag>{status}</Tag>
+  return <span className="status-text">{status}</span>
 }
 
 export function DatasourceModulePage() {
@@ -127,7 +126,7 @@ export function DatasourceModulePage() {
         title: '状态',
         dataIndex: 'status',
         key: 'status',
-        render: (value: string) => prettyStatus(value),
+        render: (value: string) => renderStatusText(value),
       },
       {
         title: '操作',
@@ -252,12 +251,12 @@ export function DatasourceModulePage() {
     <div className="module-page">
       <div className="module-hero">
         <div>
-          <Typography.Title level={2}>数据源连接管理</Typography.Title>
-          <Typography.Paragraph>
+          <Typography.Title level={5}>数据源连接管理</Typography.Title>
+          <Typography.Paragraph type="secondary">
             当前页覆盖连接列表、目标库维护、连通性测试与启停主链路，直接对接后端管理接口。
           </Typography.Paragraph>
         </div>
-        <Button type="primary" size="large" onClick={() => void openEdit(null)}>
+        <Button type="primary" onClick={() => void openEdit(null)}>
           新建连接
         </Button>
       </div>
@@ -292,7 +291,7 @@ export function DatasourceModulePage() {
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
               <Descriptions size="small" column={2} bordered>
                 <Descriptions.Item label="连接编码">{detail.connection.connectionCode}</Descriptions.Item>
-                <Descriptions.Item label="状态">{prettyStatus(detail.connection.status)}</Descriptions.Item>
+                <Descriptions.Item label="状态">{renderStatusText(detail.connection.status)}</Descriptions.Item>
                 <Descriptions.Item label="数据库类型">{detail.connection.dbType}</Descriptions.Item>
                 <Descriptions.Item label="主机端口">
                   {detail.connection.host}:{detail.connection.port}
@@ -321,7 +320,7 @@ export function DatasourceModulePage() {
                     {
                       title: '状态',
                       dataIndex: 'status',
-                      render: (value: string | undefined) => prettyStatus(value ?? 'ENABLED'),
+                      render: (value: string | undefined) => renderStatusText(value ?? 'ENABLED'),
                     },
                   ]}
                 />
@@ -333,7 +332,7 @@ export function DatasourceModulePage() {
 
       <Drawer
         title={editingConnection ? `编辑连接 · ${editingConnection.connectionCode}` : '新建连接'}
-        width={760}
+        width={720}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         destroyOnHidden
@@ -346,16 +345,22 @@ export function DatasourceModulePage() {
           </Space>
         }
       >
-        <Form<ConnectionUpsertPayload> form={form} layout="vertical" onFinish={(values) => void handleSubmit(values)}>
+        <Form<ConnectionUpsertPayload>
+          form={form}
+          layout="vertical"
+          className="compact-form"
+          onFinish={(values) => void handleSubmit(values)}
+        >
           <div className="form-grid form-grid-two">
             <Form.Item label="连接编码" name="connectionCode" rules={[{ required: true }]}>
-              <Input />
+              <Input size="small" />
             </Form.Item>
             <Form.Item label="连接名称" name="connectionName" rules={[{ required: true }]}>
-              <Input />
+              <Input size="small" />
             </Form.Item>
             <Form.Item label="数据库类型" name="dbType" rules={[{ required: true }]}>
               <Select
+                size="small"
                 options={[
                   { label: 'PostgreSQL', value: 'POSTGRESQL' },
                   { label: 'MySQL', value: 'MYSQL' },
@@ -366,6 +371,7 @@ export function DatasourceModulePage() {
             </Form.Item>
             <Form.Item label="状态" name="status">
               <Select
+                size="small"
                 options={[
                   { label: '已启用', value: 'ENABLED' },
                   { label: '已停用', value: 'DISABLED' },
@@ -373,28 +379,28 @@ export function DatasourceModulePage() {
               />
             </Form.Item>
             <Form.Item label="主机" name="host" rules={[{ required: true }]}>
-              <Input />
+              <Input size="small" />
             </Form.Item>
             <Form.Item label="端口" name="port" rules={[{ required: true }]}>
-              <InputNumber style={{ width: '100%' }} min={1} />
+              <InputNumber size="small" style={{ width: '100%' }} min={1} />
             </Form.Item>
             <Form.Item label="用户名" name="username" rules={[{ required: true }]}>
-              <Input />
+              <Input size="small" />
             </Form.Item>
             <Form.Item
               label={editingConnection ? '密码（留空则沿用）' : '密码'}
               name="passwordCiphertext"
               rules={editingConnection ? undefined : [{ required: true }]}
             >
-              <Input.Password />
+              <Input.Password size="small" />
             </Form.Item>
           </div>
 
           <Form.Item label="扩展配置 JSON" name="connectionConfigJson">
-            <Input.TextArea rows={5} />
+            <Input.TextArea rows={3} />
           </Form.Item>
           <Form.Item label="备注" name="remark">
-            <Input.TextArea rows={3} />
+            <Input size="small" />
           </Form.Item>
 
           <Form.List name="catalogs">
@@ -403,6 +409,7 @@ export function DatasourceModulePage() {
                 <div className="section-header">
                   <Typography.Title level={5}>目标库</Typography.Title>
                   <Button
+                    size="small"
                     onClick={() =>
                       add({
                         catalogCode: '',
@@ -434,13 +441,14 @@ export function DatasourceModulePage() {
                   >
                     <div className="form-grid form-grid-three">
                       <Form.Item label="编码" name={[field.name, 'catalogCode']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="名称" name={[field.name, 'catalogName']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="类型" name={[field.name, 'catalogType']} rules={[{ required: true }]}>
                         <Select
+                          size="small"
                           options={[
                             { label: 'Schema', value: 'SCHEMA' },
                             { label: 'Database', value: 'DATABASE' },
@@ -448,10 +456,11 @@ export function DatasourceModulePage() {
                         />
                       </Form.Item>
                       <Form.Item label="值" name={[field.name, 'catalogValue']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="状态" name={[field.name, 'status']}>
                         <Select
+                          size="small"
                           options={[
                             { label: '已启用', value: 'ENABLED' },
                             { label: '已停用', value: 'DISABLED' },
@@ -459,7 +468,7 @@ export function DatasourceModulePage() {
                         />
                       </Form.Item>
                       <Form.Item label="备注" name={[field.name, 'remark']}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                     </div>
                   </Card>

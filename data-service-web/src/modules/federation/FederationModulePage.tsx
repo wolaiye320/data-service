@@ -15,7 +15,6 @@ import {
   Space,
   Spin,
   Table,
-  Tag,
   Typography,
 } from 'antd'
 import {
@@ -74,34 +73,34 @@ type CapabilityRow = SourceCapabilityItem & {
   connectionName: string
 }
 
-function renderServiceStatus(status: string) {
+function renderServiceStatusText(status: string) {
   if (status === 'PUBLISHED') {
-    return <Tag color="success">已发布</Tag>
+    return <span className="status-text-success">已发布</span>
   }
   if (status === 'DISABLED') {
-    return <Tag color="default">已停用</Tag>
+    return <span className="status-text">已停用</span>
   }
-  return <Tag color="processing">草稿</Tag>
+  return <span className="status-text">草稿</span>
 }
 
-function renderPlanStatus(status: string) {
+function renderPlanStatusText(status: string) {
   if (status === 'PLANNED') {
-    return <Tag color="processing">已规划</Tag>
+    return <span className="status-text">已规划</span>
   }
   if (status === 'PUBLISHED') {
-    return <Tag color="success">已发布</Tag>
+    return <span className="status-text-success">已发布</span>
   }
-  return <Tag>未规划</Tag>
+  return <span className="status-text">未规划</span>
 }
 
-function renderValidateResult(result: string) {
+function renderValidateResultText(result: string) {
   if (result === 'PASS') {
-    return <Tag color="success">通过</Tag>
+    return <span className="status-text-success">通过</span>
   }
   if (result === 'FAIL') {
-    return <Tag color="error">失败</Tag>
+    return <span className="status-text-error">失败</span>
   }
-  return <Tag>{result}</Tag>
+  return <span className="status-text">{result}</span>
 }
 
 function safePrettyJson(raw?: string | null) {
@@ -215,12 +214,12 @@ export function FederationModulePage() {
       {
         title: '状态',
         dataIndex: 'status',
-        render: (value: string) => renderServiceStatus(value),
+        render: (value: string) => renderServiceStatusText(value),
       },
       {
         title: '规划',
         dataIndex: 'planStatus',
-        render: (value: string) => renderPlanStatus(value),
+        render: (value: string) => renderPlanStatusText(value),
       },
       {
         title: 'SQL 版本',
@@ -428,16 +427,16 @@ export function FederationModulePage() {
     <div className="module-page">
       <div className="module-hero">
         <div>
-          <Typography.Title level={2}>联邦 SQL 平台</Typography.Title>
-          <Typography.Paragraph>
+          <Typography.Title level={5}>联邦 SQL 平台</Typography.Title>
+          <Typography.Paragraph type="secondary">
             面向第二阶段主链路，直接承接联邦服务自助创建、SQL 草稿保存、校验日志、计划诊断、能力矩阵查看与发布停用。
           </Typography.Paragraph>
         </div>
         <Space>
-          <Button size="large" onClick={() => selectedId && void loadWorkspace(selectedId)} disabled={!selectedId}>
+          <Button size="small" onClick={() => selectedId && void loadWorkspace(selectedId)} disabled={!selectedId}>
             刷新诊断
           </Button>
-          <Button type="primary" size="large" onClick={() => void openEdit(null)}>
+          <Button type="primary" size="small" onClick={() => void openEdit(null)}>
             新建联邦服务
           </Button>
         </Space>
@@ -484,8 +483,8 @@ export function FederationModulePage() {
                 <Space direction="vertical" size={16} style={{ width: '100%' }}>
                   <Descriptions size="small" column={2} bordered>
                     <Descriptions.Item label="服务编码">{detail.definition.serviceCode}</Descriptions.Item>
-                    <Descriptions.Item label="状态">{renderServiceStatus(detail.definition.status)}</Descriptions.Item>
-                    <Descriptions.Item label="计划状态">{renderPlanStatus(detail.definition.planStatus)}</Descriptions.Item>
+                    <Descriptions.Item label="状态">{renderServiceStatusText(detail.definition.status)}</Descriptions.Item>
+                    <Descriptions.Item label="计划状态">{renderPlanStatusText(detail.definition.planStatus)}</Descriptions.Item>
                     <Descriptions.Item label="执行模式">{detail.definition.executionMode}</Descriptions.Item>
                     <Descriptions.Item label="SQL 版本">{detail.definition.currentSqlVersion ?? 0}</Descriptions.Item>
                     <Descriptions.Item label="联邦超时">{detail.definition.federatedQueryTimeoutSeconds ?? '-'} 秒</Descriptions.Item>
@@ -517,6 +516,7 @@ export function FederationModulePage() {
                 extra={
                   <Button
                     type="primary"
+                    size="small"
                     icon={<SaveOutlined />}
                     loading={sqlSaving}
                     onClick={() => void sqlForm.submit()}
@@ -531,7 +531,7 @@ export function FederationModulePage() {
                     <Typography.Text type="secondary">
                       保存后将调用后端联邦 Parser、Validator、Planner、Optimizer，并刷新诊断结果。
                     </Typography.Text>
-                    <Tag color="processing">{detail.definition.executionMode}</Tag>
+                    <span className="status-text">{detail.definition.executionMode}</span>
                   </div>
                   <Form.Item
                     label="联邦 SQL"
@@ -539,10 +539,10 @@ export function FederationModulePage() {
                     rules={[{ required: true, message: '请输入联邦 SQL' }]}
                     className="federation-sql-editor"
                   >
-                    <Input.TextArea rows={12} placeholder="SELECT ... FROM mysql_orders JOIN pg_customers ..." />
+                    <Input.TextArea rows={8} placeholder="SELECT ... FROM mysql_orders JOIN pg_customers ..." />
                   </Form.Item>
                   <Form.Item label="草稿说明" name="sqlComment">
-                    <Input.TextArea rows={3} placeholder="说明本次联邦 SQL 草稿的变更目的与注意事项" />
+                    <Input.TextArea rows={2} placeholder="说明本次联邦 SQL 草稿的变更目的与注意事项" />
                   </Form.Item>
                 </Form>
               </Card>
@@ -572,8 +572,8 @@ export function FederationModulePage() {
       </div>
 
       <Drawer
-        title={editingDefinition ? `编辑联邦服务 · ${editingDefinition.serviceCode}` : '新建联邦服务草稿'}
-        width={960}
+        title={editingDefinition ? `编辑联邦服务 · ${editingDefinition.serviceCode}` : '新建联邦服务'}
+        width={800}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         destroyOnHidden
@@ -589,23 +589,25 @@ export function FederationModulePage() {
         <Form<ServiceDefinitionUpsertPayload>
           form={definitionForm}
           layout="vertical"
+          className="compact-form"
           onFinish={(values) => void handleSubmit(values)}
         >
           <div className="form-grid form-grid-two">
             <Form.Item label="服务编码" name="serviceCode" rules={[{ required: true }]}>
-              <Input />
+              <Input size="small" />
             </Form.Item>
             <Form.Item label="服务名称" name="serviceName" rules={[{ required: true }]}>
-              <Input />
+              <Input size="small" />
             </Form.Item>
             <Form.Item label="服务类型" name="serviceType">
-              <Select disabled options={[{ label: '联邦查询', value: 'FEDERATED_QUERY' }]} />
+              <Select size="small" disabled options={[{ label: '联邦查询', value: 'FEDERATED_QUERY' }]} />
             </Form.Item>
             <Form.Item label="SQL 类型" name="sqlType">
-              <Select disabled options={[{ label: '联邦 SQL', value: 'FEDERATED_SQL' }]} />
+              <Select size="small" disabled options={[{ label: '联邦 SQL', value: 'FEDERATED_SQL' }]} />
             </Form.Item>
             <Form.Item label="执行模式" name="executionMode" rules={[{ required: true }]}>
               <Select
+                size="small"
                 options={[
                   { label: '远端优先 + 本地补算', value: 'REMOTE_PLUS_LOCAL' },
                   { label: '远端执行', value: 'REMOTE_ONLY' },
@@ -614,6 +616,7 @@ export function FederationModulePage() {
             </Form.Item>
             <Form.Item label="计划状态" name="planStatus" rules={[{ required: true }]}>
               <Select
+                size="small"
                 options={[
                   { label: '未规划', value: 'UNPLANNED' },
                   { label: '已规划', value: 'PLANNED' },
@@ -622,21 +625,21 @@ export function FederationModulePage() {
               />
             </Form.Item>
             <Form.Item label="批量上限" name="maxBatchSize">
-              <InputNumber style={{ width: '100%' }} min={1} />
+              <InputNumber size="small" style={{ width: '100%' }} min={1} />
             </Form.Item>
             <Form.Item label="结果上限" name="maxResultRows">
-              <InputNumber style={{ width: '100%' }} min={1} />
+              <InputNumber size="small" style={{ width: '100%' }} min={1} />
             </Form.Item>
             <Form.Item label="查询超时（秒）" name="queryTimeoutSeconds">
-              <InputNumber style={{ width: '100%' }} min={1} />
+              <InputNumber size="small" style={{ width: '100%' }} min={1} />
             </Form.Item>
             <Form.Item label="联邦超时（秒）" name="federatedQueryTimeoutSeconds">
-              <InputNumber style={{ width: '100%' }} min={1} />
+              <InputNumber size="small" style={{ width: '100%' }} min={1} />
             </Form.Item>
           </div>
 
           <Form.Item label="说明备注" name="remark">
-            <Input.TextArea rows={3} />
+            <Input size="small" />
           </Form.Item>
 
           <Form.List name="sources">
@@ -676,6 +679,7 @@ export function FederationModulePage() {
                     <div className="form-grid form-grid-three">
                       <Form.Item label="连接" name={[field.name, 'connectionId']} rules={[{ required: true }]}>
                         <Select
+                          size="small"
                           options={connections.map((item) => ({
                             label: `${item.connectionName} (${item.connectionCode})`,
                             value: item.id,
@@ -683,19 +687,19 @@ export function FederationModulePage() {
                         />
                       </Form.Item>
                       <Form.Item label="catalogId" name={[field.name, 'catalogId']}>
-                        <InputNumber style={{ width: '100%' }} min={1} />
+                        <InputNumber size="small" style={{ width: '100%' }} min={1} />
                       </Form.Item>
                       <Form.Item label="来源别名" name={[field.name, 'sourceAlias']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="来源类型" name={[field.name, 'sourceType']} rules={[{ required: true }]}>
-                        <Select options={[{ label: '表', value: 'TABLE' }]} />
+                        <Select size="small" options={[{ label: '表', value: 'TABLE' }]} />
                       </Form.Item>
                       <Form.Item label="来源值" name={[field.name, 'sourceValue']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="扩展配置 JSON" name={[field.name, 'configJson']}>
-                        <Input.TextArea rows={3} />
+                        <Input size="small" />
                       </Form.Item>
                     </div>
                   </Card>
@@ -739,13 +743,14 @@ export function FederationModulePage() {
                   >
                     <div className="form-grid form-grid-three">
                       <Form.Item label="参数名" name={[field.name, 'paramName']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="展示名" name={[field.name, 'displayName']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="参数类型" name={[field.name, 'paramType']} rules={[{ required: true }]}>
                         <Select
+                          size="small"
                           options={[
                             { label: '字符串', value: 'STRING' },
                             { label: '数字', value: 'NUMBER' },
@@ -756,13 +761,13 @@ export function FederationModulePage() {
                         />
                       </Form.Item>
                       <Form.Item label="SQL 占位符" name={[field.name, 'sqlPlaceholder']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="排序" name={[field.name, 'sortOrder']} rules={[{ required: true }]}>
-                        <InputNumber style={{ width: '100%' }} min={1} />
+                        <InputNumber size="small" style={{ width: '100%' }} min={1} />
                       </Form.Item>
                       <Form.Item label="默认值" name={[field.name, 'defaultValue']}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                     </div>
                   </Card>
@@ -807,19 +812,20 @@ export function FederationModulePage() {
                   >
                     <div className="form-grid form-grid-three">
                       <Form.Item label="来源别名" name={[field.name, 'sourceAlias']}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="来源列" name={[field.name, 'sourceColumn']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="字段名" name={[field.name, 'fieldName']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="展示名" name={[field.name, 'displayName']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="字段类型" name={[field.name, 'fieldType']} rules={[{ required: true }]}>
                         <Select
+                          size="small"
                           options={[
                             { label: '字符串', value: 'STRING' },
                             { label: '数字', value: 'NUMBER' },
@@ -830,7 +836,7 @@ export function FederationModulePage() {
                         />
                       </Form.Item>
                       <Form.Item label="排序" name={[field.name, 'sortOrder']} rules={[{ required: true }]}>
-                        <InputNumber style={{ width: '100%' }} min={1} />
+                        <InputNumber size="small" style={{ width: '100%' }} min={1} />
                       </Form.Item>
                     </div>
                   </Card>
@@ -857,7 +863,7 @@ function ValidateLogPanel({ logs }: { logs: SqlValidateLogItem[] }) {
         {
           title: '结果',
           dataIndex: 'result',
-          render: (value: string) => renderValidateResult(value),
+          render: (value: string) => renderValidateResultText(value),
         },
         { title: '说明', dataIndex: 'message' },
         { title: '版本', dataIndex: 'version' },
@@ -972,10 +978,10 @@ function EditableSection({ title, actionLabel, emptyText, onAdd, children }: Edi
   const hasItems = childArray.some(Boolean)
 
   return (
-    <Space direction="vertical" size={12} style={{ width: '100%', marginBottom: 24 }}>
+    <Space direction="vertical" size={12} style={{ width: '100%', marginBottom: 16 }}>
       <div className="section-header">
         <Typography.Title level={5}>{title}</Typography.Title>
-        <Button onClick={onAdd}>{actionLabel}</Button>
+        <Button size="small" onClick={onAdd}>{actionLabel}</Button>
       </div>
       {!hasItems ? <Alert type="info" showIcon message={emptyText} /> : null}
       {children}

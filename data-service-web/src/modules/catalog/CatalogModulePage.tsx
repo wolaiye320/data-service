@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Card, Descriptions, Drawer, Form, Input, Select, Space, Spin, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Descriptions, Drawer, Form, Input, Select, Space, Spin, Table, Typography } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { ActionIconButton } from '../../components/ActionIconButton'
 import { useAppFeedback } from '../../components/useAppFeedback'
@@ -7,11 +7,11 @@ import type { ColumnsType } from 'antd/es/table'
 import { getJson, putJson, resolveErrorMessage } from '../../services/http'
 import type { CatalogItem, ConnectionDetail, ConnectionItem, ConnectionUpsertPayload } from '../../types/admin'
 
-function renderStatus(status?: string) {
+function renderStatusText(status?: string) {
   if ((status ?? 'ENABLED') === 'ENABLED') {
-    return <Tag color="success">已启用</Tag>
+    return <span className="status-text-success">已启用</span>
   }
-  return <Tag color="default">已停用</Tag>
+  return <span className="status-text">已停用</span>
 }
 
 type CatalogFormValue = {
@@ -79,7 +79,7 @@ export function CatalogModulePage() {
       {
         title: '状态',
         dataIndex: 'status',
-        render: (value: string) => renderStatus(value),
+        render: (value: string) => renderStatusText(value),
       },
     ],
     [catalogRows.length, detail?.connection.id],
@@ -148,12 +148,12 @@ export function CatalogModulePage() {
     <div className="module-page">
       <div className="module-hero">
         <div>
-          <Typography.Title level={2}>目标库管理</Typography.Title>
-          <Typography.Paragraph>
+          <Typography.Title level={5}>目标库管理</Typography.Title>
+          <Typography.Paragraph type="secondary">
             独立查看一个连接下的目标库清单，统一维护 catalog 编码、类型、值和启停状态。
           </Typography.Paragraph>
         </div>
-        <Button type="primary" size="large" disabled={!detail} onClick={openEdit}>
+        <Button type="primary" disabled={!detail} onClick={openEdit}>
           维护目标库
         </Button>
       </div>
@@ -188,7 +188,7 @@ export function CatalogModulePage() {
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
               <Descriptions size="small" column={2} bordered>
                 <Descriptions.Item label="连接编码">{detail.connection.connectionCode}</Descriptions.Item>
-                <Descriptions.Item label="连接状态">{renderStatus(detail.connection.status)}</Descriptions.Item>
+                <Descriptions.Item label="连接状态">{renderStatusText(detail.connection.status)}</Descriptions.Item>
                 <Descriptions.Item label="连接名称">{detail.connection.connectionName}</Descriptions.Item>
                 <Descriptions.Item label="数据库类型">{detail.connection.dbType}</Descriptions.Item>
                 <Descriptions.Item label="地址">
@@ -211,7 +211,7 @@ export function CatalogModulePage() {
                   {
                     title: '状态',
                     dataIndex: 'status',
-                    render: (value: string | undefined) => renderStatus(value),
+                    render: (value: string | undefined) => renderStatusText(value),
                   },
                   { title: '备注', dataIndex: 'remark', render: (value: string | null | undefined) => value || '-' },
                 ]}
@@ -223,7 +223,7 @@ export function CatalogModulePage() {
 
       <Drawer
         title={detail ? `维护目标库 · ${detail.connection.connectionCode}` : '维护目标库'}
-        width={820}
+        width={720}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         destroyOnHidden
@@ -236,13 +236,19 @@ export function CatalogModulePage() {
           </Space>
         }
       >
-        <Form<CatalogFormValue> form={form} layout="vertical" onFinish={(values) => void handleSubmit(values)}>
+        <Form<CatalogFormValue>
+          form={form}
+          layout="vertical"
+          className="compact-form"
+          onFinish={(values) => void handleSubmit(values)}
+        >
           <Form.List name="catalogs">
             {(fields, { add, remove }) => (
               <Space direction="vertical" size={12} style={{ width: '100%' }}>
                 <div className="section-header">
                   <Typography.Title level={5}>目标库清单</Typography.Title>
                   <Button
+                    size="small"
                     onClick={() =>
                       add({
                         catalogCode: '',
@@ -274,13 +280,14 @@ export function CatalogModulePage() {
                   >
                     <div className="form-grid form-grid-three">
                       <Form.Item label="编码" name={[field.name, 'catalogCode']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="名称" name={[field.name, 'catalogName']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="类型" name={[field.name, 'catalogType']} rules={[{ required: true }]}>
                         <Select
+                          size="small"
                           options={[
                             { label: 'Schema', value: 'SCHEMA' },
                             { label: 'Database', value: 'DATABASE' },
@@ -288,10 +295,11 @@ export function CatalogModulePage() {
                         />
                       </Form.Item>
                       <Form.Item label="目标值" name={[field.name, 'catalogValue']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="状态" name={[field.name, 'status']}>
                         <Select
+                          size="small"
                           options={[
                             { label: '已启用', value: 'ENABLED' },
                             { label: '已停用', value: 'DISABLED' },
@@ -299,7 +307,7 @@ export function CatalogModulePage() {
                         />
                       </Form.Item>
                       <Form.Item label="备注" name={[field.name, 'remark']}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                     </div>
                   </Card>

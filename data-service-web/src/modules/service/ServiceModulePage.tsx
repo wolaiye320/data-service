@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import {
   Alert,
   Button,
@@ -12,7 +13,6 @@ import {
   Space,
   Spin,
   Table,
-  Tag,
   Typography,
 } from 'antd'
 import {
@@ -57,14 +57,14 @@ const DEFAULT_DEFINITION: ServiceDefinitionUpsertPayload = {
   fields: [],
 }
 
-function renderServiceStatus(status: string) {
+function renderServiceStatusText(status: string) {
   if (status === 'PUBLISHED') {
-    return <Tag color="success">已发布</Tag>
+    return <span className="status-text-success">已发布</span>
   }
   if (status === 'DISABLED') {
-    return <Tag color="default">已停用</Tag>
+    return <span className="status-text">已停用</span>
   }
-  return <Tag color="processing">草稿</Tag>
+  return <span className="status-text">草稿</span>
 }
 
 export function ServiceModulePage() {
@@ -138,7 +138,7 @@ export function ServiceModulePage() {
       {
         title: '状态',
         dataIndex: 'status',
-        render: (value: string) => renderServiceStatus(value),
+        render: (value: string) => renderServiceStatusText(value),
       },
       {
         title: '版本',
@@ -308,12 +308,12 @@ export function ServiceModulePage() {
     <div className="module-page">
       <div className="module-hero">
         <div>
-          <Typography.Title level={2}>数据服务配置与发布</Typography.Title>
-          <Typography.Paragraph>
+          <Typography.Title level={5}>数据服务配置与发布</Typography.Title>
+          <Typography.Paragraph type="secondary">
             当前页覆盖服务草稿、来源、参数、字段、SQL、发布、停用与版本查看主流程。
           </Typography.Paragraph>
         </div>
-        <Button type="primary" size="large" onClick={() => void openEdit(null)}>
+        <Button type="primary" onClick={() => void openEdit(null)}>
           新建服务草稿
         </Button>
       </div>
@@ -348,7 +348,7 @@ export function ServiceModulePage() {
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
               <Descriptions size="small" column={2} bordered>
                 <Descriptions.Item label="服务编码">{detail.definition.serviceCode}</Descriptions.Item>
-                <Descriptions.Item label="状态">{renderServiceStatus(detail.definition.status)}</Descriptions.Item>
+                <Descriptions.Item label="状态">{renderServiceStatusText(detail.definition.status)}</Descriptions.Item>
                 <Descriptions.Item label="服务类型">{detail.definition.serviceType}</Descriptions.Item>
                 <Descriptions.Item label="执行模式">{detail.definition.executionMode}</Descriptions.Item>
                 <Descriptions.Item label="SQL 类型">{detail.definition.sqlType}</Descriptions.Item>
@@ -435,7 +435,7 @@ export function ServiceModulePage() {
                     {
                       title: '状态',
                       dataIndex: 'status',
-                      render: (value: string) => renderServiceStatus(value),
+                      render: (value: string) => renderServiceStatusText(value),
                     },
                     { title: '创建人', dataIndex: 'createdBy' },
                     { title: '创建时间', dataIndex: 'createdAt' },
@@ -449,7 +449,7 @@ export function ServiceModulePage() {
 
       <Drawer
         title={editingDefinition ? `编辑服务 · ${editingDefinition.serviceCode}` : '新建服务草稿'}
-        width={920}
+        width={800}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         destroyOnHidden
@@ -462,25 +462,31 @@ export function ServiceModulePage() {
           </Space>
         }
       >
-        <Form<ServiceDefinitionUpsertPayload> form={form} layout="vertical" onFinish={(values) => void handleSubmit(values)}>
+        <Form<ServiceDefinitionUpsertPayload>
+          form={form}
+          layout="vertical"
+          className="compact-form"
+          onFinish={(values) => void handleSubmit(values)}
+        >
           <div className="form-grid form-grid-two">
             <Form.Item label="服务编码" name="serviceCode" rules={[{ required: true }]}>
-              <Input />
+              <Input size="small" />
             </Form.Item>
             <Form.Item label="服务名称" name="serviceName" rules={[{ required: true }]}>
-              <Input />
+              <Input size="small" />
             </Form.Item>
             <Form.Item label="服务类型" name="serviceType" rules={[{ required: true }]}>
-              <Select options={[{ label: '简单查询', value: 'SIMPLE_QUERY' }]} />
+              <Select size="small" options={[{ label: '简单查询', value: 'SIMPLE_QUERY' }]} />
             </Form.Item>
             <Form.Item label="SQL 类型" name="sqlType" rules={[{ required: true }]}>
-              <Select options={[{ label: '简单 SQL', value: 'SIMPLE_SQL' }]} />
+              <Select size="small" options={[{ label: '简单 SQL', value: 'SIMPLE_SQL' }]} />
             </Form.Item>
             <Form.Item label="执行模式" name="executionMode" rules={[{ required: true }]}>
-              <Select options={[{ label: '远端执行', value: 'REMOTE_ONLY' }]} />
+              <Select size="small" options={[{ label: '远端执行', value: 'REMOTE_ONLY' }]} />
             </Form.Item>
             <Form.Item label="计划状态" name="planStatus" rules={[{ required: true }]}>
               <Select
+                size="small"
                 options={[
                   { label: '未规划', value: 'UNPLANNED' },
                   { label: '已发布', value: 'PUBLISHED' },
@@ -488,24 +494,24 @@ export function ServiceModulePage() {
               />
             </Form.Item>
             <Form.Item label="批量上限" name="maxBatchSize">
-              <InputNumber style={{ width: '100%' }} min={1} />
+              <InputNumber size="small" style={{ width: '100%' }} min={1} />
             </Form.Item>
             <Form.Item label="结果上限" name="maxResultRows">
-              <InputNumber style={{ width: '100%' }} min={1} />
+              <InputNumber size="small" style={{ width: '100%' }} min={1} />
             </Form.Item>
             <Form.Item label="查询超时（秒）" name="queryTimeoutSeconds">
-              <InputNumber style={{ width: '100%' }} min={1} />
+              <InputNumber size="small" style={{ width: '100%' }} min={1} />
             </Form.Item>
             <Form.Item label="联邦超时（秒）" name="federatedQueryTimeoutSeconds">
-              <InputNumber style={{ width: '100%' }} min={1} />
+              <InputNumber size="small" style={{ width: '100%' }} min={1} />
             </Form.Item>
           </div>
 
           <Form.Item label="SQL 模板" name="sqlTemplate">
-            <Input.TextArea rows={6} />
+            <Input.TextArea rows={4} />
           </Form.Item>
           <Form.Item label="备注" name="remark">
-            <Input.TextArea rows={3} />
+            <Input size="small" />
           </Form.Item>
 
           <Form.List name="sources">
@@ -545,26 +551,36 @@ export function ServiceModulePage() {
                     <div className="form-grid form-grid-three">
                       <Form.Item label="连接" name={[field.name, 'connectionId']} rules={[{ required: true }]}>
                         <Select
-                          options={connections.map((item) => ({
-                            label: `${item.connectionName} (${item.connectionCode})`,
-                            value: item.id,
-                          }))}
+                          size="small"
+                          options={connections.map((c) => ({ label: c.connectionName, value: c.id }))}
                         />
                       </Form.Item>
-                      <Form.Item label="catalogId" name={[field.name, 'catalogId']}>
-                        <InputNumber style={{ width: '100%' }} min={1} />
+                      <Form.Item label="别名" name={[field.name, 'sourceAlias']} rules={[{ required: true }]}>
+                        <Input size="small" />
                       </Form.Item>
-                      <Form.Item label="来源别名" name={[field.name, 'sourceAlias']} rules={[{ required: true }]}>
-                        <Input />
+                      <Form.Item label="类型" name={[field.name, 'sourceType']} rules={[{ required: true }]}>
+                        <Select
+                          size="small"
+                          options={[
+                            { label: '表', value: 'TABLE' },
+                            { label: '视图', value: 'VIEW' },
+                          ]}
+                        />
                       </Form.Item>
-                      <Form.Item label="来源类型" name={[field.name, 'sourceType']} rules={[{ required: true }]}>
-                        <Select options={[{ label: '表', value: 'TABLE' }]} />
-                      </Form.Item>
-                      <Form.Item label="来源值" name={[field.name, 'sourceValue']} rules={[{ required: true }]}>
-                        <Input />
+                      <Form.Item label="对象" name={[field.name, 'sourceValue']} rules={[{ required: true }]}>
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="关联键" name={[field.name, 'joinKey']}>
-                        <Input />
+                        <Input size="small" />
+                      </Form.Item>
+                      <Form.Item label="状态" name={[field.name, 'status']}>
+                        <Select
+                          size="small"
+                          options={[
+                            { label: '已启用', value: 'ENABLED' },
+                            { label: '已停用', value: 'DISABLED' },
+                          ]}
+                        />
                       </Form.Item>
                     </div>
                   </Card>
@@ -578,7 +594,7 @@ export function ServiceModulePage() {
               <EditableSection
                 title="参数定义"
                 actionLabel="新增参数"
-                emptyText="至少配置一个参数，发布前会强校验。"
+                emptyText="按需配置查询参数。"
                 onAdd={() =>
                   add({
                     paramName: '',
@@ -587,7 +603,7 @@ export function ServiceModulePage() {
                     sqlPlaceholder: '',
                     required: true,
                     defaultValue: '',
-                    sortOrder: fields.length + 1,
+                    sortOrder: fields.length,
                     remark: '',
                   })
                 }
@@ -608,28 +624,33 @@ export function ServiceModulePage() {
                   >
                     <div className="form-grid form-grid-three">
                       <Form.Item label="参数名" name={[field.name, 'paramName']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="展示名" name={[field.name, 'displayName']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="类型" name={[field.name, 'paramType']} rules={[{ required: true }]}>
                         <Select
+                          size="small"
                           options={[
                             { label: '字符串', value: 'STRING' },
-                            { label: '数字', value: 'NUMBER' },
+                            { label: '整数', value: 'INTEGER' },
+                            { label: '长整数', value: 'LONG' },
+                            { label: '小数', value: 'DECIMAL' },
                             { label: '布尔', value: 'BOOLEAN' },
+                            { label: '日期', value: 'DATE' },
+                            { label: '时间戳', value: 'DATETIME' },
                           ]}
                         />
                       </Form.Item>
-                      <Form.Item label="SQL 占位符" name={[field.name, 'sqlPlaceholder']} rules={[{ required: true }]}>
-                        <Input />
-                      </Form.Item>
-                      <Form.Item label="排序" name={[field.name, 'sortOrder']} rules={[{ required: true }]}>
-                        <InputNumber style={{ width: '100%' }} min={1} />
+                      <Form.Item label="占位符" name={[field.name, 'sqlPlaceholder']} rules={[{ required: true }]}>
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="默认值" name={[field.name, 'defaultValue']}>
-                        <Input />
+                        <Input size="small" />
+                      </Form.Item>
+                      <Form.Item label="排序" name={[field.name, 'sortOrder']}>
+                        <InputNumber size="small" style={{ width: '100%' }} />
                       </Form.Item>
                     </div>
                   </Card>
@@ -641,9 +662,9 @@ export function ServiceModulePage() {
           <Form.List name="fields">
             {(fields, { add, remove }) => (
               <EditableSection
-                title="返回字段"
+                title="字段映射"
                 actionLabel="新增字段"
-                emptyText="至少配置一个返回字段，发布前会强校验。"
+                emptyText="配置返回字段映射。"
                 onAdd={() =>
                   add({
                     sourceAlias: '',
@@ -651,7 +672,7 @@ export function ServiceModulePage() {
                     fieldName: '',
                     displayName: '',
                     fieldType: 'STRING',
-                    sortOrder: fields.length + 1,
+                    sortOrder: fields.length,
                     primaryKey: false,
                     joinKey: false,
                     remark: '',
@@ -674,28 +695,33 @@ export function ServiceModulePage() {
                   >
                     <div className="form-grid form-grid-three">
                       <Form.Item label="来源别名" name={[field.name, 'sourceAlias']}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="来源列" name={[field.name, 'sourceColumn']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="字段名" name={[field.name, 'fieldName']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
                       <Form.Item label="展示名" name={[field.name, 'displayName']} rules={[{ required: true }]}>
-                        <Input />
+                        <Input size="small" />
                       </Form.Item>
-                      <Form.Item label="字段类型" name={[field.name, 'fieldType']} rules={[{ required: true }]}>
+                      <Form.Item label="类型" name={[field.name, 'fieldType']} rules={[{ required: true }]}>
                         <Select
+                          size="small"
                           options={[
                             { label: '字符串', value: 'STRING' },
-                            { label: '数字', value: 'NUMBER' },
+                            { label: '整数', value: 'INTEGER' },
+                            { label: '长整数', value: 'LONG' },
+                            { label: '小数', value: 'DECIMAL' },
                             { label: '布尔', value: 'BOOLEAN' },
+                            { label: '日期', value: 'DATE' },
+                            { label: '时间戳', value: 'DATETIME' },
                           ]}
                         />
                       </Form.Item>
-                      <Form.Item label="排序" name={[field.name, 'sortOrder']} rules={[{ required: true }]}>
-                        <InputNumber style={{ width: '100%' }} min={1} />
+                      <Form.Item label="排序" name={[field.name, 'sortOrder']}>
+                        <InputNumber size="small" style={{ width: '100%' }} />
                       </Form.Item>
                     </div>
                   </Card>
@@ -714,7 +740,7 @@ type EditableSectionProps = {
   actionLabel: string
   emptyText: string
   onAdd: () => void
-  children: React.ReactNode
+  children: ReactNode
 }
 
 function EditableSection({ title, actionLabel, emptyText, onAdd, children }: EditableSectionProps) {
@@ -722,10 +748,10 @@ function EditableSection({ title, actionLabel, emptyText, onAdd, children }: Edi
   const hasItems = childArray.some(Boolean)
 
   return (
-    <Space direction="vertical" size={12} style={{ width: '100%', marginBottom: 24 }}>
+    <Space direction="vertical" size={12} style={{ width: '100%', marginBottom: 16 }}>
       <div className="section-header">
         <Typography.Title level={5}>{title}</Typography.Title>
-        <Button onClick={onAdd}>{actionLabel}</Button>
+        <Button size="small" onClick={onAdd}>{actionLabel}</Button>
       </div>
       {!hasItems ? <Alert type="info" showIcon message={emptyText} /> : null}
       {children}

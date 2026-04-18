@@ -12,10 +12,40 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       locale={zhCN}
       theme={{
         token: {
-          colorPrimary: '#0f766e',
-          colorInfo: '#0f766e',
-          borderRadius: 12,
-          fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
+          colorPrimary: '#1677ff',
+          colorSuccess: '#52c41a',
+          colorWarning: '#faad14',
+          colorError: '#ff4d4f',
+          colorInfo: '#1677ff',
+          borderRadius: 6,
+          borderRadiusLG: 8,
+          controlHeight: 32,
+          controlHeightSM: 24,
+          fontSize: 14,
+          fontSizeHeading5: 16,
+          colorText: 'rgba(0, 0, 0, 0.88)',
+          colorTextSecondary: 'rgba(0, 0, 0, 0.65)',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+        },
+        components: {
+          Table: {
+            headerBg: '#fafafa',
+            headerColor: 'rgba(0, 0, 0, 0.88)',
+            rowHoverBg: '#f5f5f5',
+          },
+          Card: {
+            paddingLG: 24,
+          },
+          Modal: {
+            borderRadiusLG: 8,
+          },
+          Drawer: {
+            borderRadiusLG: 8,
+          },
+          Menu: {
+            itemHeight: 40,
+            itemBorderRadius: 8,
+          },
         },
       }}
     >

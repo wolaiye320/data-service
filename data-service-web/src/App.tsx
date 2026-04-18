@@ -1,20 +1,24 @@
 import { Suspense } from 'react'
-import { Layout, Menu, Space, Spin, Tag, Typography } from 'antd'
+import { Layout, Menu, Badge, Avatar, Dropdown, Space, Typography, Spin } from 'antd'
 import {
+  DatabaseOutlined,
+  TableOutlined,
   AppstoreOutlined,
   ClusterOutlined,
-  CloudServerOutlined,
-  DatabaseOutlined,
   ExperimentOutlined,
-  ProfileOutlined,
+  CloudServerOutlined,
   SafetyCertificateOutlined,
-  TableOutlined,
+  ProfileOutlined,
+  BellOutlined,
+  UserOutlined,
+  SettingOutlined,
+  LogoutOutlined,
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { appRoutes } from './router'
 import type { AppRoutePath } from './router'
 
-const { Header, Sider, Content } = Layout
+const { Sider, Content } = Layout
 
 const menuItems = [
   { key: '/datasource', icon: <DatabaseOutlined />, label: '数据源连接' },
@@ -27,6 +31,12 @@ const menuItems = [
   { key: '/audit', icon: <ProfileOutlined />, label: '审计日志' },
 ]
 
+const userMenuItems = [
+  { key: 'profile', icon: <UserOutlined />, label: '个人中心' },
+  { key: 'settings', icon: <SettingOutlined />, label: '系统设置' },
+  { key: 'logout', icon: <LogoutOutlined />, label: '退出登录' },
+]
+
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -34,45 +44,56 @@ function App() {
   const CurrentPage = appRoutes[routePath] ?? appRoutes['/']
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider width={248} theme="light" style={{ borderRight: '1px solid #d9e2ec' }}>
+    <Layout className="app-layout">
+      <Sider width={220} className="app-sider">
         <div className="brand-panel">
-          <Typography.Text className="brand-kicker">P0 运行底座</Typography.Text>
-          <Typography.Title level={3} style={{ margin: 0, color: '#072635' }}>
-            data-service
-          </Typography.Title>
-          <Typography.Paragraph className="brand-copy">
-            统一承载连接管理、服务配置、发布审计与联邦 SQL 平台扩展。
-          </Typography.Paragraph>
+          <div className="brand-logo">
+            <div className="brand-icon" />
+            <Typography.Title level={4} className="brand-title">
+              Data Service
+            </Typography.Title>
+          </div>
         </div>
         <Menu
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
-          style={{ borderInlineEnd: 'none' }}
+          className="app-menu"
         />
-      </Sider>
-      <Layout>
-        <Header className="top-header">
-          <Space size={12}>
-            <Tag color="processing">React 19 + Ant Design 5</Tag>
-            <Tag color="success">端口 3001</Tag>
-            <Tag color="default">统一响应已对齐后端</Tag>
-          </Space>
-        </Header>
-        <Content className="page-shell">
-          <Suspense
-            fallback={
-              <div className="page-loading">
-                <Spin size="large" />
-              </div>
-            }
+        <div className="sider-bottom">
+          <div className="sider-bottom-item">
+            <Badge dot offset={[-2, 2]}>
+              <BellOutlined />
+            </Badge>
+            <span>消息</span>
+          </div>
+          <Dropdown
+            menu={{ items: userMenuItems }}
+            placement="topLeft"
+            arrow
           >
-            <CurrentPage />
-          </Suspense>
-        </Content>
-      </Layout>
+            <div className="sider-bottom-item user-item">
+              <Avatar size="small" icon={<UserOutlined />} />
+              <Space direction="vertical" size={0}>
+                <span className="user-name">admin</span>
+                <span className="user-role">管理员</span>
+              </Space>
+            </div>
+          </Dropdown>
+        </div>
+      </Sider>
+      <Content className="app-content">
+        <Suspense
+          fallback={
+            <div className="page-loading">
+              <Spin size="large" />
+            </div>
+          }
+        >
+          <CurrentPage />
+        </Suspense>
+      </Content>
     </Layout>
   )
 }
