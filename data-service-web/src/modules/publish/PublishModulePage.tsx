@@ -138,10 +138,7 @@ export function PublishModulePage() {
     <div className="module-page">
       <div className="module-hero">
         <div>
-          <Typography.Title level={2}>发布管理</Typography.Title>
-          <Typography.Paragraph>
-            面向草稿发布、已发布停用与版本快照查看。常规配置编辑放在“数据服务”页，这里聚焦发布动作和历史追溯。
-          </Typography.Paragraph>
+          <Typography.Title level={5}>发布管理</Typography.Title>
         </div>
       </div>
 

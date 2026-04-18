@@ -1,21 +1,17 @@
-import { Card, Space, Tag, Typography } from 'antd'
+import { Typography } from 'antd'
 
 type ModuleIntroCardProps = {
   title: string
-  description: string
-  tags: string[]
 }
 
-export function ModuleIntroCard({ title, description, tags }: ModuleIntroCardProps) {
+export function ModuleIntroCard({ title }: ModuleIntroCardProps) {
   return (
-    <Card>
-      <Typography.Title level={3}>{title}</Typography.Title>
-      <Typography.Paragraph>{description}</Typography.Paragraph>
-      <Space wrap>
-        {tags.map((tag) => (
-          <Tag key={tag}>{tag}</Tag>
-        ))}
-      </Space>
-    </Card>
+    <div className="module-page">
+      <div className="module-hero">
+        <div>
+          <Typography.Title level={5}>{title}</Typography.Title>
+        </div>
+      </div>
+    </div>
   )
 }

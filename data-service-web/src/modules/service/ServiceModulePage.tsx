@@ -308,10 +308,7 @@ export function ServiceModulePage() {
     <div className="module-page">
       <div className="module-hero">
         <div>
-          <Typography.Title level={5}>数据服务配置与发布</Typography.Title>
-          <Typography.Paragraph type="secondary">
-            当前页覆盖服务草稿、来源、参数、字段、SQL、发布、停用与版本查看主流程。
-          </Typography.Paragraph>
+          <Typography.Title level={5}>数据服务</Typography.Title>
         </div>
         <Button type="primary" onClick={() => void openEdit(null)}>
           新建服务草稿

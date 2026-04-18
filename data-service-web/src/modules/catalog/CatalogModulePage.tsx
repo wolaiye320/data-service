@@ -149,9 +149,6 @@ export function CatalogModulePage() {
       <div className="module-hero">
         <div>
           <Typography.Title level={5}>目标库管理</Typography.Title>
-          <Typography.Paragraph type="secondary">
-            独立查看一个连接下的目标库清单，统一维护 catalog 编码、类型、值和启停状态。
-          </Typography.Paragraph>
         </div>
         <Button type="primary" disabled={!detail} onClick={openEdit}>
           维护目标库

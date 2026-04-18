@@ -251,10 +251,7 @@ export function DatasourceModulePage() {
     <div className="module-page">
       <div className="module-hero">
         <div>
-          <Typography.Title level={5}>数据源连接管理</Typography.Title>
-          <Typography.Paragraph type="secondary">
-            当前页覆盖连接列表、目标库维护、连通性测试与启停主链路，直接对接后端管理接口。
-          </Typography.Paragraph>
+          <Typography.Title level={5}>数据源连接</Typography.Title>
         </div>
         <Button type="primary" onClick={() => void openEdit(null)}>
           新建连接

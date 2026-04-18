@@ -428,15 +428,12 @@ export function FederationModulePage() {
       <div className="module-hero">
         <div>
           <Typography.Title level={5}>联邦 SQL 平台</Typography.Title>
-          <Typography.Paragraph type="secondary">
-            面向第二阶段主链路，直接承接联邦服务自助创建、SQL 草稿保存、校验日志、计划诊断、能力矩阵查看与发布停用。
-          </Typography.Paragraph>
         </div>
         <Space>
-          <Button size="small" onClick={() => selectedId && void loadWorkspace(selectedId)} disabled={!selectedId}>
+          <Button onClick={() => selectedId && void loadWorkspace(selectedId)} disabled={!selectedId}>
             刷新诊断
           </Button>
-          <Button type="primary" size="small" onClick={() => void openEdit(null)}>
+          <Button type="primary" onClick={() => void openEdit(null)}>
             新建联邦服务
           </Button>
         </Space>
@@ -516,7 +513,6 @@ export function FederationModulePage() {
                 extra={
                   <Button
                     type="primary"
-                    size="small"
                     icon={<SaveOutlined />}
                     loading={sqlSaving}
                     onClick={() => void sqlForm.submit()}

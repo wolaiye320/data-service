@@ -125,10 +125,7 @@ export function QueryDebugModulePage() {
     <div className="module-page">
       <div className="module-hero">
         <div>
-          <Typography.Title level={2}>统一查询调试</Typography.Title>
-          <Typography.Paragraph>
-            直接调用统一查询接口，支持单次调试、批量调试、运行元信息查看和结果表格化展示。
-          </Typography.Paragraph>
+          <Typography.Title level={5}>统一查询调试</Typography.Title>
         </div>
         <Segmented<QueryMode>
           value={mode}
