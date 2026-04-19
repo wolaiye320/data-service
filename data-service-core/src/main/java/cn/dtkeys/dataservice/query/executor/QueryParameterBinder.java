@@ -13,8 +13,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -22,8 +20,6 @@ import java.util.stream.Collectors;
  */
 @Component
 public class QueryParameterBinder {
-
-    private static final Pattern NAMED_PARAMETER_PATTERN = Pattern.compile(":([A-Za-z][A-Za-z0-9_]*)");
 
     /**
      * 根据参数定义和请求参数构建绑定参数。
@@ -34,19 +30,24 @@ public class QueryParameterBinder {
      * @return 绑定后的 SQL 与参数
      */
     public BoundQuery bind(String sql, List<DSParam> paramDefinitions, Map<String, Object> requestParams) {
-        Set<String> placeholders = extractPlaceholders(sql);
+        Map<String, Object> safeRequestParams = requestParams == null ? Map.of() : requestParams;
+        SqlTemplateRenderer.RenderedSql renderedSql = SqlTemplateRenderer.render(sql, safeRequestParams);
+        Set<String> placeholders = renderedSql.placeholders();
+        Set<String> allPlaceholders = SqlTemplateRenderer.extractPlaceholders(sql);
 
         Map<String, DSParam> definitionsByPlaceholder = paramDefinitions.stream()
             .collect(Collectors.toMap(DSParam::getSqlPlaceholder, definition -> definition, (left, right) -> left,
                 LinkedHashMap::new));
 
-        if (!definitionsByPlaceholder.keySet().equals(placeholders)) {
+        if (!definitionsByPlaceholder.keySet().equals(allPlaceholders)) {
             throw new ParamInvalidException("参数定义与 SQL 占位符不一致");
         }
 
-        Map<String, Object> safeRequestParams = requestParams == null ? Map.of() : requestParams;
         LinkedHashMap<String, Object> boundParams = new LinkedHashMap<>();
         for (DSParam definition : paramDefinitions) {
+            if (!placeholders.contains(definition.getSqlPlaceholder())) {
+                continue;
+            }
             Object rawValue = safeRequestParams.get(definition.getParamName());
             if (isEmpty(rawValue) && definition.getDefaultValue() != null && !definition.getDefaultValue().isBlank()) {
                 rawValue = definition.getDefaultValue();
@@ -69,17 +70,7 @@ public class QueryParameterBinder {
             throw new ParamInvalidException("存在未定义参数: " + String.join(",", unknownParams));
         }
 
-        return new BoundQuery(sql, Map.copyOf(boundParams));
-    }
-
-    private Set<String> extractPlaceholders(String sql) {
-        String sanitizedSql = sql.replaceAll("'([^']|'')*'", " ");
-        Matcher matcher = NAMED_PARAMETER_PATTERN.matcher(sanitizedSql);
-        Set<String> placeholders = new java.util.LinkedHashSet<>();
-        while (matcher.find()) {
-            placeholders.add(matcher.group(1));
-        }
-        return placeholders;
+        return new BoundQuery(renderedSql.sql(), Map.copyOf(boundParams));
     }
 
     private Object convertValue(DSParam definition, Object rawValue) {

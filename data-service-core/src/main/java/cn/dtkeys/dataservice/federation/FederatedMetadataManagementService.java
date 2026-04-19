@@ -18,6 +18,7 @@ import cn.dtkeys.dataservice.federation.model.FederatedDiagnostics;
 import cn.dtkeys.dataservice.federation.model.FederatedParsedQuery;
 import cn.dtkeys.dataservice.federation.model.FederatedPlan;
 import cn.dtkeys.dataservice.federation.model.ValidationResult;
+import cn.dtkeys.dataservice.query.executor.SqlTemplateRenderer;
 import cn.dtkeys.dataservice.federation.optimizer.FederatedSqlOptimizer;
 import cn.dtkeys.dataservice.federation.parser.FederatedSqlParser;
 import cn.dtkeys.dataservice.federation.planner.FederatedSqlPlanner;
@@ -128,6 +129,7 @@ public class FederatedMetadataManagementService {
         if (sqlText == null || sqlText.isBlank()) {
             throw new ParamInvalidException("federatedSqlText 不能为空");
         }
+        SqlTemplateRenderer.validateTemplateSyntax(sqlText);
 
         String operator = OperatorContext.getOperator().orElse("SYSTEM");
         int nextVersion = resolveNextDraftVersion(definition);
@@ -204,6 +206,7 @@ public class FederatedMetadataManagementService {
         if (sqlText == null || sqlText.isBlank()) {
             throw new ParamInvalidException("federatedSqlText 不能为空");
         }
+        SqlTemplateRenderer.validateTemplateSyntax(sqlText);
 
         FederatedParsedQuery parsedQuery = parse(sqlText);
         ValidationResult validationResult = validateRecognizedSources(serviceId, federatedSqlValidator.validate(parsedQuery));

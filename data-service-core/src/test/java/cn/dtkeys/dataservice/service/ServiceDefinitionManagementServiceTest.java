@@ -278,6 +278,26 @@ class ServiceDefinitionManagementServiceTest {
         assertThat(definitionCaptor.getValue().getMaxResultRows()).isNull();
     }
 
+    @Test
+    void shouldRejectLegacyNamedParameterSyntaxOnCreate() {
+        OperatorContext.setOperator("dev-a");
+        OperatorContext.setRole("DEVELOPER");
+        DSDefinition definition = new DSDefinition();
+        definition.setServiceCode("legacy_param_service");
+        definition.setServiceName("旧参数服务");
+        definition.setServiceType("SIMPLE_QUERY");
+        definition.setSqlTemplate("select customer_id from customer_order where customer_id = :customerId");
+        definition.setSqlType("SIMPLE_SQL");
+
+        assertThatThrownBy(() -> serviceDefinitionManagementService.createDraft(
+            definition,
+            List.of(buildSource()),
+            List.of(buildParam()),
+            List.of(buildField())
+        )).isInstanceOf(ParamInvalidException.class)
+            .hasMessage("SQL 模板仅支持 Doma 风格参数语法，请使用 /* customerId */0");
+    }
+
     private DSDefinition buildDefinition(Long id, String serviceCode, String status, int version) {
         DSDefinition definition = new DSDefinition();
         definition.setId(id);
@@ -285,7 +305,7 @@ class ServiceDefinitionManagementServiceTest {
         definition.setServiceName("客户画像");
         definition.setServiceType("SIMPLE_QUERY");
         definition.setStatus(status);
-        definition.setSqlTemplate("select customer_id as customer_customer_id from customer_order where customer_id = :customerId");
+        definition.setSqlTemplate("select customer_id as customer_customer_id from customer_order where customer_id = /* customerId */0");
         definition.setSqlType("SIMPLE_SQL");
         definition.setExecutionMode("REMOTE_ONLY");
         definition.setPlanStatus("UNPLANNED");

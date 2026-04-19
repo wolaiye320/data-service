@@ -21,11 +21,13 @@ class QueryParameterBinderTest {
         DSParam tags = param("tags", "tags", "LIST", false, null);
 
         BoundQuery boundQuery = binder.bind(
-            "select * from customer where customer_id = :customerId and enabled = :enabled and tag in (:tags)",
+            "select * from customer where customer_id = /* customerId */0 and enabled = /* enabled */false and tag in (/* tags */(0))",
             List.of(customerId, enabled, tags),
             Map.of("customerId", "1001", "tags", List.of("VIP", "A"))
         );
 
+        assertThat(boundQuery.sql())
+            .isEqualTo("select * from customer where customer_id = :customerId and enabled = :enabled and tag in (:tags)");
         assertThat(boundQuery.params())
             .containsEntry("customerId", 1001L)
             .containsEntry("enabled", true);
@@ -33,17 +35,71 @@ class QueryParameterBinderTest {
     }
 
     @Test
+    void shouldKeepIfBlockWhenParameterPresent() {
+        DSParam customerId = param("customerId", "customerId", "LONG", false, null);
+
+        BoundQuery boundQuery = binder.bind(
+            """
+                select * from customer where 1 = 1
+                /*%if customerId != null */
+                  and customer_id = /* customerId */0
+                /*%end*/
+                """,
+            List.of(customerId),
+            Map.of("customerId", 1001)
+        );
+
+        assertThat(boundQuery.sql()).contains("and customer_id = :customerId");
+        assertThat(boundQuery.params()).containsEntry("customerId", 1001L);
+    }
+
+    @Test
+    void shouldDropIfBlockWhenParameterMissing() {
+        DSParam customerId = param("customerId", "customerId", "LONG", false, null);
+
+        BoundQuery boundQuery = binder.bind(
+            """
+                select * from customer where 1 = 1
+                /*%if customerId != null */
+                  and customer_id = /* customerId */0
+                /*%end*/
+                """,
+            List.of(customerId),
+            Map.of()
+        );
+
+        assertThat(boundQuery.sql()).doesNotContain("customer_id =");
+        assertThat(boundQuery.params()).isEmpty();
+    }
+
+    @Test
+    void shouldRejectUnsupportedIfExpression() {
+        DSParam customerId = param("customerId", "customerId", "LONG", false, null);
+
+        assertThatThrownBy(() -> binder.bind(
+            """
+                select * from customer where 1 = 1
+                /*%if customerId > 0 */
+                  and customer_id = /* customerId */0
+                /*%end*/
+                """,
+            List.of(customerId),
+            Map.of("customerId", 1)
+        )).isInstanceOf(ParamInvalidException.class);
+    }
+
+    @Test
     void shouldRejectMissingRequiredAndUnknownParameters() {
         DSParam customerId = param("customerId", "customerId", "LONG", true, null);
 
         assertThatThrownBy(() -> binder.bind(
-            "select * from customer where customer_id = :customerId",
+            "select * from customer where customer_id = /* customerId */0",
             List.of(customerId),
             Map.of()
         )).isInstanceOf(ParamInvalidException.class);
 
         assertThatThrownBy(() -> binder.bind(
-            "select * from customer where customer_id = :customerId",
+            "select * from customer where customer_id = /* customerId */0",
             List.of(customerId),
             Map.of("customerId", 1, "unknown", "x")
         )).isInstanceOf(ParamInvalidException.class);
@@ -54,13 +110,13 @@ class QueryParameterBinderTest {
         DSParam customerId = param("customerId", "customerId", "LONG", true, null);
 
         assertThatThrownBy(() -> binder.bind(
-            "select * from customer where customer_id = :customerId and status = :status",
+            "select * from customer where customer_id = /* customerId */0 and status = /* status */'ENABLED'",
             List.of(customerId),
             Map.of("customerId", 1)
         )).isInstanceOf(ParamInvalidException.class);
 
         assertThatThrownBy(() -> binder.bind(
-            "select * from customer where customer_id = :customerId",
+            "select * from customer where customer_id = /* customerId */0",
             List.of(customerId),
             Map.of("customerId", "abc")
         )).isInstanceOf(ParamInvalidException.class);

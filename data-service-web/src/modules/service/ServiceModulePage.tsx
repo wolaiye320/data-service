@@ -16,6 +16,7 @@ import {
   Space,
   Spin,
   Table,
+  Tooltip,
   Typography,
   Tag,
 } from 'antd'
@@ -143,31 +144,6 @@ function isFederatedDefinition(definition?: { sqlType?: string | null; serviceTy
   return definition?.sqlType === 'FEDERATED_SQL' || definition?.serviceType === 'FEDERATED_QUERY'
 }
 
-function inferExecutionMode(values?: {
-  sqlType?: string | null
-  serviceType?: string | null
-  sqlTemplate?: string | null
-  sources?: SourceItem[] | null
-}) {
-  if (values?.sqlType === 'FEDERATED_SQL' || values?.serviceType === 'FEDERATED_QUERY') {
-    return 'REMOTE_PLUS_LOCAL'
-  }
-  if ((values?.sources?.length ?? 0) > 1) {
-    return 'REMOTE_PLUS_LOCAL'
-  }
-  if (values?.sqlTemplate?.toUpperCase().includes(' JOIN ')) {
-    return 'REMOTE_PLUS_LOCAL'
-  }
-  return 'REMOTE_ONLY'
-}
-
-function inferPlanStatus(values?: { sqlType?: string | null; status?: string | null }) {
-  if (values?.status === 'PUBLISHED') {
-    return 'PUBLISHED'
-  }
-  return values?.sqlType === 'FEDERATED_SQL' ? 'PLANNED' : 'UNPLANNED'
-}
-
 function renderExecutionModeLabel(executionMode: string) {
   return executionMode === 'REMOTE_PLUS_LOCAL' ? '远端优先 + 本地补算' : '远端执行'
 }
@@ -202,6 +178,103 @@ function parseJsonObject(text: string, fieldName: string) {
   } catch {
     throw new Error(`${fieldName} 必须是有效的 JSON 对象`)
   }
+}
+
+const SQL_KEYWORDS = [
+  'select', 'from', 'where', 'join', 'left', 'right', 'inner', 'outer', 'full', 'on', 'and', 'or',
+  'group', 'by', 'order', 'having', 'limit', 'offset', 'union', 'all', 'distinct', 'as', 'case',
+  'when', 'then', 'else', 'end', 'in', 'is', 'null', 'not', 'exists', 'like', 'between', 'with',
+  'insert', 'into', 'update', 'delete', 'create', 'table', 'view'
+]
+
+const LEGACY_NAMED_PARAM_PATTERN = /(^|[^:]):([A-Za-z][A-Za-z0-9_]*)/g
+
+function escapeHtml(text: string) {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+}
+
+function highlightSql(text: string) {
+  let html = escapeHtml(text)
+  html = html.replace(/(--.*)$/gm, '<span class="sql-token-comment">$1</span>')
+  html = html.replace(/('[^']*(?:''[^']*)*')/g, '<span class="sql-token-string">$1</span>')
+  html = html.replace(/(\/\*%\/?(?:if|end)[\s\S]*?\*\/)/g, '<span class="sql-token-directive">$1</span>')
+  html = html.replace(/(\/\*\s*[A-Za-z][A-Za-z0-9_]*\s*\*\/)/g, '<span class="sql-token-param">$1</span>')
+  const keywordPattern = new RegExp(`\\b(${SQL_KEYWORDS.join('|')})\\b`, 'gi')
+  html = html.replace(keywordPattern, '<span class="sql-token-keyword">$1</span>')
+  return html
+}
+
+function convertLegacyNamedParamsToDoma(
+  sqlText?: string | null,
+  params?: Array<Pick<ParamItem, 'paramName' | 'paramType'>>
+) {
+  if (!sqlText) {
+    return ''
+  }
+  const paramTypeMap = new Map((params ?? []).map((item) => [item.paramName, item.paramType]))
+  return sqlText.replace(LEGACY_NAMED_PARAM_PATTERN, (match, prefix: string, name: string) => {
+    const defaultLiteral = resolveDomaDefaultLiteral(paramTypeMap.get(name))
+    return `${prefix}/* ${name} */${defaultLiteral}`
+  })
+}
+
+function resolveDomaDefaultLiteral(paramType?: string) {
+  switch (paramType) {
+    case 'BOOLEAN':
+      return 'true'
+    case 'LONG':
+    case 'NUMBER':
+    case 'INTEGER':
+    case 'INT':
+    case 'DECIMAL':
+      return '0'
+    case 'LIST':
+      return '(0)'
+    default:
+      return "'demo'"
+  }
+}
+
+function SqlHighlightEditor({
+  value,
+  onChange,
+  placeholder,
+  rows = 8,
+}: {
+  value?: string
+  onChange?: (value: string) => void
+  placeholder?: string
+  rows?: number
+}) {
+  const normalizedValue = value ?? ''
+  const lineHeight = 24
+  const minHeight = rows * lineHeight + 32
+
+  return (
+    <div className="sql-highlight-editor" style={{ minHeight }}>
+      {normalizedValue ? (
+        <pre
+          className="sql-highlight-editor__backdrop"
+          aria-hidden="true"
+          dangerouslySetInnerHTML={{ __html: highlightSql(normalizedValue) + '\n' }}
+        />
+      ) : (
+        <div className="sql-highlight-editor__placeholder" aria-hidden="true">
+          {placeholder}
+        </div>
+      )}
+      <Input.TextArea
+        value={normalizedValue}
+        onChange={(event) => onChange?.(event.target.value)}
+        autoSize={{ minRows: rows }}
+        className="sql-highlight-editor__input"
+        spellCheck={false}
+      />
+    </div>
+  )
 }
 
 function EditableSection({
@@ -491,17 +564,19 @@ export default function ServiceModulePage() {
     }
     const response = await getJson<ServiceDefinitionDetail>(`/api/admin/service-definitions/${id}`)
     const editingDetail = response.data
+    const displaySqlTemplate = convertLegacyNamedParamsToDoma(editingDetail.definition.sqlTemplate, editingDetail.params)
     setEditingDefinition(editingDetail.definition)
     form.setFieldsValue({
       ...DEFAULT_DEFINITION,
       ...(isFederatedDefinition(editingDetail.definition) ? FEDERATED_DEFAULTS : {}),
       ...editingDetail.definition,
+      sqlTemplate: displaySqlTemplate,
       sources: editingDetail.sources,
       params: editingDetail.params,
       fields: editingDetail.fields,
     } as ServiceDefinitionUpsertPayload)
     autoDetectForm.setFieldsValue({
-      draftSqlText: editingDetail.definition.sqlTemplate ?? '',
+      draftSqlText: displaySqlTemplate,
       defaultConnectionId: editingDetail.sources[0]?.connectionId ?? undefined,
       defaultCatalogId: editingDetail.sources[0]?.catalogId ?? undefined,
     })
@@ -1168,10 +1243,6 @@ export default function ServiceModulePage() {
           <Form.Item noStyle shouldUpdate={(prev, next) => prev.sqlType !== next.sqlType}>
             {({ getFieldValue }) => {
               const federated = getFieldValue('sqlType') === 'FEDERATED_SQL'
-              const draftValues = form.getFieldsValue(true) as ServiceDefinitionUpsertPayload
-              const executionModeText =
-                inferExecutionMode(draftValues) === 'REMOTE_PLUS_LOCAL' ? '远端优先 + 本地补算' : '远端执行'
-              const planStatusText = federated ? '创建时保持未规划，保存联邦 SQL 后自动进入已规划，发布后自动进入已发布' : '普通 SQL 保存后保持未规划'
               return (
                 <>
                   <div className="service-create-top-grid">
@@ -1244,70 +1315,33 @@ export default function ServiceModulePage() {
                     </Form>
                   </div>
 
-                  <Card size="small" className="service-create-sql-card" style={{ marginBottom: 16 }}>
-                    <div className="service-create-sql-layout">
-                      <div>
-                        <div className="service-create-sql-header">
-                          <div>
-                            <Typography.Text strong>SQL 即服务</Typography.Text>
-                            <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0' }}>
-                              粘贴 SQL 后点击解析，系统自动识别数据来源、参数与字段映射。
-                            </Typography.Paragraph>
-                          </div>
-                          <Button
-                            type="primary"
-                            icon={<ReloadOutlined />}
-                            loading={detectingSql}
-                            onClick={() => void handleAutoDetect()}
-                          >
-                            SQL 解析
-                          </Button>
-                        </div>
-                        <Form<AutoDetectForm> form={autoDetectForm} layout="vertical" component={false}>
-                          <Form.Item
-                            name="draftSqlText"
-                            label="SQL"
-                            rules={[{ required: true, message: '请输入 SQL' }]}
-                            style={{ marginBottom: 0 }}
-                          >
-                            <Input.TextArea
-                              rows={8}
-                              className="service-create-sql-input"
-                              placeholder="SELECT c.customer_id, o.order_amount FROM customer_base c JOIN customer_order o ON c.customer_id = o.customer_id WHERE c.customer_id = :customerId"
+                  <Form<AutoDetectForm> form={autoDetectForm} layout="vertical" component={false}>
+                    <Form.Item
+                      name="draftSqlText"
+                      label={
+                        <span className="service-create-sql-label">
+                          <span>SQL</span>
+                          <Tooltip title="粘贴 SQL 后点击解析，系统自动识别数据来源、参数与字段映射。">
+                            <Button
+                              type="text"
+                              size="small"
+                              aria-label="查看 SQL 解析说明"
+                              icon={<InfoCircleOutlined />}
                             />
-                          </Form.Item>
-                        </Form>
-                      </div>
-                      <div className="service-create-summary-panel">
-                        <div className="service-create-summary-title">系统判定</div>
-                        <div className="service-create-summary-list">
-                          <div className="service-create-summary-item">
-                            <span>执行模式</span>
-                            <strong>{executionModeText}</strong>
-                          </div>
-                          <div className="service-create-summary-item">
-                            <span>计划状态</span>
-                            <strong>{federated ? '按流程自动变更' : renderPlanStatusLabel(inferPlanStatus(draftValues))}</strong>
-                          </div>
-                          <div className="service-create-summary-item">
-                            <span>资源限制</span>
-                            <strong>系统统一配置</strong>
-                          </div>
-                        </div>
-                        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                          {planStatusText}
-                        </Typography.Paragraph>
-                      </div>
-                    </div>
-                  </Card>
-
-                  <Alert
-                    type="info"
-                    showIcon
-                    message="解析后请确认识别结果"
-                    description="来源、参数、字段映射会自动回填到下方区域；批量上限、结果上限、查询超时、联邦超时由系统管理统一配置。"
-                    style={{ marginBottom: 16 }}
-                  />
+                          </Tooltip>
+                        </span>
+                      }
+                      rules={[{ required: true, message: '请输入 SQL' }]}
+                    >
+                      <SqlHighlightEditor placeholder={`SELECT c.customer_id, o.order_amount
+FROM customer_base c
+JOIN customer_order o ON c.customer_id = o.customer_id
+WHERE 1 = 1
+/*%if customerId != null */
+  AND c.customer_id = /* customerId */0
+/*%end*/`} />
+                    </Form.Item>
+                  </Form>
 
                   <Form.Item label="SQL 模板" name="sqlTemplate" hidden>
                     <Input.TextArea rows={4} />
@@ -1317,22 +1351,16 @@ export default function ServiceModulePage() {
                     <Input size="small" />
                   </Form.Item>
 
-                  <Card size="small" title="解析结果确认" className="service-create-result-card" style={{ marginBottom: 16 }}>
-                    <div className="service-create-result-stats">
-                      <div className="service-create-result-stat">
-                        <span>数据来源</span>
-                        <strong>{draftValues.sources?.length ?? 0}</strong>
-                      </div>
-                      <div className="service-create-result-stat">
-                        <span>参数</span>
-                        <strong>{draftValues.params?.length ?? 0}</strong>
-                      </div>
-                      <div className="service-create-result-stat">
-                        <span>字段映射</span>
-                        <strong>{draftValues.fields?.length ?? 0}</strong>
-                      </div>
-                    </div>
-                  </Card>
+                  <div className="service-create-action-row">
+                    <Button
+                      type="primary"
+                      icon={<ReloadOutlined />}
+                      loading={detectingSql}
+                      onClick={() => void handleAutoDetect()}
+                    >
+                      SQL 解析
+                    </Button>
+                  </div>
                 </>
               )
             }}

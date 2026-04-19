@@ -334,23 +334,10 @@ body {
   margin-bottom: 20px;
 }
 
-.service-create-sql-card .ant-card-body {
-  padding: 20px;
-}
-
-.service-create-sql-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 20px;
-  align-items: start;
-}
-
-.service-create-sql-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+.service-create-sql-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .service-create-sql-input {
@@ -359,71 +346,85 @@ body {
   box-shadow: inset 0 0 0 1px rgba(22, 119, 255, 0.08);
 }
 
-.service-create-summary-panel {
-  background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
-  border: 1px solid #d6e4ff;
-  border-radius: 12px;
-  padding: 16px;
-}
-
-.service-create-summary-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1d39c4;
-  margin-bottom: 12px;
-}
-
-.service-create-summary-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.service-create-summary-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.service-create-summary-item span {
-  font-size: 12px;
-  color: #597ef7;
-}
-
-.service-create-summary-item strong {
-  font-size: 14px;
-  color: #10239e;
-}
-
-.service-create-result-card .ant-card-body {
-  padding: 16px 20px;
-}
-
-.service-create-result-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.service-create-result-stat {
-  padding: 12px 14px;
+.sql-highlight-editor {
+  position: relative;
   border-radius: 10px;
-  background: #fafcff;
-  border: 1px solid #d9e6ff;
+  border: 1px solid #91b4ff;
+  background: #fbfdff;
+  box-shadow: inset 0 0 0 1px rgba(22, 119, 255, 0.08);
+  overflow: hidden;
+}
+
+.sql-highlight-editor__backdrop,
+.sql-highlight-editor__placeholder {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 11px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 14px;
+  line-height: 24px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  pointer-events: none;
+}
+
+.sql-highlight-editor__backdrop {
+  color: #334155;
+}
+
+.sql-highlight-editor__placeholder {
+  color: #bfbfbf;
+}
+
+.sql-highlight-editor__input.ant-input {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  color: transparent;
+  caret-color: #1677ff;
+  border: none;
+  box-shadow: none;
+  resize: vertical;
+  padding: 11px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 14px;
+  line-height: 24px;
+}
+
+.sql-highlight-editor__input.ant-input:focus,
+.sql-highlight-editor__input.ant-input:focus-within {
+  box-shadow: none;
+}
+
+.sql-token-keyword {
+  color: #0958d9;
+  font-weight: 600;
+}
+
+.sql-token-string {
+  color: #389e0d;
+}
+
+.sql-token-comment {
+  color: #8c8c8c;
+  font-style: italic;
+}
+
+.sql-token-param {
+  color: #d46b08;
+  font-weight: 600;
+}
+
+.sql-token-directive {
+  color: #722ed1;
+  font-weight: 600;
+}
+
+.service-create-action-row {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.service-create-result-stat span {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.service-create-result-stat strong {
-  font-size: 22px;
-  color: #111827;
+  justify-content: flex-end;
+  margin: 0 0 16px;
 }
 
 /* 区块标题栏 */
@@ -1488,8 +1489,7 @@ body {
   }
 
   .service-create-top-grid,
-  .service-create-sql-layout,
-  .service-create-result-stats {
+  .service-create-sql-layout {
     grid-template-columns: 1fr;
   }
 }

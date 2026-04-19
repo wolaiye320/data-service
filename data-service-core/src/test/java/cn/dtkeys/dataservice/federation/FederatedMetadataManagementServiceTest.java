@@ -141,7 +141,7 @@ class FederatedMetadataManagementServiceTest {
         FederatedMetadataManagementService.FederatedServiceMetadata metadata =
             federatedMetadataManagementService.saveFederatedSqlDraft(
                 2L,
-                "select id from pg_customer join mysql_order on pg_customer.id = mysql_order.customer_id where id = :id",
+                "select id from pg_customer join mysql_order on pg_customer.id = mysql_order.customer_id where id = /* id */0",
                 "first draft"
             );
 
@@ -151,6 +151,21 @@ class FederatedMetadataManagementServiceTest {
         assertThat(definitionCaptor.getValue().getExecutionMode()).isEqualTo("REMOTE_PLUS_LOCAL");
         assertThat(definitionCaptor.getValue().getPlanStatus()).isEqualTo("PLANNED");
         assertThat(metadata.definition().getServiceCode()).isEqualTo("federated_customer");
+    }
+
+    @Test
+    void shouldRejectLegacyNamedParameterSyntaxWhenSavingFederatedSqlDraft() {
+        DSDefinition definition = new DSDefinition();
+        definition.setId(7L);
+        definition.setServiceType("FEDERATED_QUERY");
+        when(dsDefinitionRepository.findById(7L)).thenReturn(definition);
+
+        assertThatThrownBy(() -> federatedMetadataManagementService.saveFederatedSqlDraft(
+            7L,
+            "select id from pg_customer where customer_id = :customerId",
+            "legacy syntax"
+        )).isInstanceOf(ParamInvalidException.class)
+            .hasMessage("SQL 模板仅支持 Doma 风格参数语法，请使用 /* customerId */0");
     }
 
     @Test

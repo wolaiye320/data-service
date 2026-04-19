@@ -9,6 +9,7 @@ import cn.dtkeys.dataservice.query.executor.BoundQuery;
 import cn.dtkeys.dataservice.query.executor.NamedParameterQueryExecutor;
 import cn.dtkeys.dataservice.query.executor.QueryParameterBinder;
 import cn.dtkeys.dataservice.query.executor.QueryResultMapper;
+import cn.dtkeys.dataservice.query.executor.SqlTemplateRenderer;
 import cn.dtkeys.dataservice.query.executor.StreamingQueryRowHandler;
 import cn.dtkeys.dataservice.query.executor.SqlReadOnlyValidator;
 import org.springframework.stereotype.Component;
@@ -397,11 +398,7 @@ public class PredefinedJoinQueryExecutor {
         }
 
         private static Set<String> extract(String sql) {
-            return java.util.regex.Pattern.compile(":([A-Za-z][A-Za-z0-9_]*)")
-                .matcher(sql.replaceAll("'([^']|'')*'", " "))
-                .results()
-                .map(result -> result.group(1))
-                .collect(Collectors.toSet());
+            return SqlTemplateRenderer.extractPlaceholders(sql);
         }
     }
 

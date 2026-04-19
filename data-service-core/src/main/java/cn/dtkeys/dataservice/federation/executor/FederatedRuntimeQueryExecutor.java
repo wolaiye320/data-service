@@ -12,6 +12,7 @@ import cn.dtkeys.dataservice.query.executor.BoundQuery;
 import cn.dtkeys.dataservice.query.executor.NamedParameterQueryExecutor;
 import cn.dtkeys.dataservice.query.executor.QueryParameterBinder;
 import cn.dtkeys.dataservice.query.executor.QueryResultMapper;
+import cn.dtkeys.dataservice.query.executor.SqlTemplateRenderer;
 import cn.dtkeys.dataservice.query.executor.SqlReadOnlyValidator;
 import org.springframework.stereotype.Component;
 
@@ -24,14 +25,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Component
 public class FederatedRuntimeQueryExecutor {
-
-    private static final Pattern PARAMETER_PATTERN = Pattern.compile(":([A-Za-z][A-Za-z0-9_]*)");
     private static final String LOOKUP_PARAM_NAME = "federatedLookupValues";
     private static final int DEFAULT_PREVIEW_ROWS = 200;
     private static final int DEFAULT_FETCH_SIZE = 200;
@@ -356,12 +354,7 @@ public class FederatedRuntimeQueryExecutor {
     }
 
     private Set<String> extractPlaceholders(String sql) {
-        Matcher matcher = PARAMETER_PATTERN.matcher(sql);
-        Set<String> placeholders = new java.util.LinkedHashSet<>();
-        while (matcher.find()) {
-            placeholders.add(matcher.group(1));
-        }
-        return placeholders;
+        return SqlTemplateRenderer.extractPlaceholders(sql);
     }
 
     private DSParam listParam(String placeholder) {

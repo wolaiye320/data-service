@@ -38,7 +38,13 @@ class SqlAutoDetectServiceTest {
                 select c.customer_id as customerId, c.customer_name, sum(o.order_amount) as totalAmount
                 from public.customer_base c
                 join public.customer_order o on c.customer_id = o.customer_id
-                where c.customer_id = :customerId and o.active = :active
+                where 1 = 1
+                /*%if customerId != null */
+                  and c.customer_id = /* customerId */0
+                /*%end*/
+                /*%if active != null */
+                  and o.active = /* active */true
+                /*%end*/
                 """,
             "FEDERATED_SQL",
             null,
@@ -81,7 +87,7 @@ class SqlAutoDetectServiceTest {
         SqlAutoDetectService service = new SqlAutoDetectService(dsConnectionRepository, dsCatalogRepository);
 
         SqlAutoDetectResponse response = service.detect(
-            "select customer_id from customer_base where customer_id = :customerId",
+            "select customer_id from customer_base where customer_id = /* customerId */0",
             "SIMPLE_SQL",
             null,
             null
@@ -93,6 +99,33 @@ class SqlAutoDetectServiceTest {
             assertThat(source.catalogId()).isNull();
             assertThat(source.connectionResolved()).isFalse();
             assertThat(source.catalogResolved()).isFalse();
+        });
+    }
+
+    @Test
+    void shouldGenerateTemplateStyleSqlPlaceholders() {
+        when(dsConnectionRepository.findAll()).thenReturn(List.of(buildConnection(1L)));
+        when(dsCatalogRepository.findByConnectionId(1L)).thenReturn(List.of(buildCatalog(11L, 1L)));
+
+        SqlAutoDetectService service = new SqlAutoDetectService(dsConnectionRepository, dsCatalogRepository);
+
+        SqlAutoDetectResponse response = service.detect(
+            """
+                select customer_id
+                from customer_base
+                where 1 = 1
+                /*%if customerId != null */
+                  and customer_id = /* customerId */0
+                /*%end*/
+                """,
+            "SIMPLE_SQL",
+            null,
+            null
+        );
+
+        assertThat(response.params()).singleElement().satisfies(param -> {
+            assertThat(param.paramName()).isEqualTo("customerId");
+            assertThat(param.sqlPlaceholder()).isEqualTo("customerId");
         });
     }
 

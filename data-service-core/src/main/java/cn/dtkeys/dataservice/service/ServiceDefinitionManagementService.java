@@ -16,6 +16,7 @@ import cn.dtkeys.dataservice.audit.AuditEvent;
 import cn.dtkeys.dataservice.audit.AuditLogService;
 import cn.dtkeys.dataservice.audit.AuditAction;
 import cn.dtkeys.dataservice.query.executor.SqlReadOnlyValidator;
+import cn.dtkeys.dataservice.query.executor.SqlTemplateRenderer;
 import cn.dtkeys.dataservice.repository.DSDefinitionRepository;
 import cn.dtkeys.dataservice.repository.DSFieldRepository;
 import cn.dtkeys.dataservice.repository.DSParamRepository;
@@ -332,6 +333,7 @@ public class ServiceDefinitionManagementService {
             throw new ParamInvalidException("sqlType 不能为空");
         }
         if (!isBlank(definition.getSqlTemplate())) {
+            SqlTemplateRenderer.validateTemplateSyntax(definition.getSqlTemplate());
             sqlReadOnlyValidator.validate(definition.getSqlTemplate());
         }
     }

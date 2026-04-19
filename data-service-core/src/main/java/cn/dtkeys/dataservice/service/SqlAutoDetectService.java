@@ -30,8 +30,6 @@ import java.util.regex.Pattern;
 @ConditionalOnProperty(name = "data-service.metadata.enabled", havingValue = "true", matchIfMissing = true)
 public class SqlAutoDetectService {
 
-    private static final Pattern PARAMETER_PATTERN = Pattern.compile(":([A-Za-z][A-Za-z0-9_]*)");
-
     private final DSConnectionRepository dsConnectionRepository;
     private final DSCatalogRepository dsCatalogRepository;
     private final FederatedSqlParser federatedSqlParser;
@@ -175,12 +173,9 @@ public class SqlAutoDetectService {
     }
 
     private List<SqlAutoDetectResponse.DetectedParamView> detectParams(String sqlText) {
-        String sanitizedSql = sqlText.replaceAll("'([^']|'')*'", " ");
-        Matcher matcher = PARAMETER_PATTERN.matcher(sanitizedSql);
-        LinkedHashSet<String> placeholders = new LinkedHashSet<>();
-        while (matcher.find()) {
-            placeholders.add(matcher.group(1));
-        }
+        LinkedHashSet<String> placeholders = new LinkedHashSet<>(
+            cn.dtkeys.dataservice.query.executor.SqlTemplateRenderer.extractPlaceholders(sqlText)
+        );
         List<SqlAutoDetectResponse.DetectedParamView> params = new ArrayList<>();
         int index = 1;
         for (String placeholder : placeholders) {
