@@ -368,7 +368,9 @@ public class FederatedMetadataManagementService {
     }
 
     private int resolveNextDraftVersion(DSDefinition definition) {
-        return definition.getCurrentSqlVersion() == null ? 1 : definition.getCurrentSqlVersion() + 1;
+        int serviceVersion = definition.getVersion() == null ? 0 : definition.getVersion();
+        int currentSqlVersion = definition.getCurrentSqlVersion() == null ? 0 : definition.getCurrentSqlVersion();
+        return Math.max(serviceVersion, currentSqlVersion) + 1;
     }
 
     private int resolveDraftVersion(DSDefinition definition, DSSqlText draftSql) {

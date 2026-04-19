@@ -36,14 +36,6 @@ else
 fi
 echo
 
-echo "--- Commits vs base ---"
-git log --oneline "${base_ref}..HEAD" || true
-echo
-
-echo "--- Changed files vs base ---"
-git diff --name-only "${base_ref}...HEAD" || true
-echo
-
 echo "--- Risk scan (keywords) ---"
 git diff --cached --name-only | awk '
   /\.sql$/ || /V[0-9]+__.*\.sql$/ {print "[db] " $0}

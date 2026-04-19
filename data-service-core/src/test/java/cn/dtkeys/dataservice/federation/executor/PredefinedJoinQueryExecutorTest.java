@@ -266,6 +266,7 @@ class PredefinedJoinQueryExecutorTest {
         return new DataServiceRuntimeSource(source, connection, catalog);
     }
 
+
     private DSParam param(String name, String type, String placeholder) {
         DSParam param = new DSParam();
         param.setParamName(name);

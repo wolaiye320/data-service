@@ -126,7 +126,8 @@
 
 ## 4.MCP规范
 
-- 操作系统元数据库时，必须使用 MCP `data_service`；操作业务数据库 `bankdb` 时，必须使用 MCP `bankdb`
+- 操作系统元数据库时，必须使用 MCP `data_service`；
+- 联邦查询postgresql业务数据库 `bankdb` 时，必须使用 MCP `bankdb`,限定操作schema为“ist”, 联邦查询mysql业务数据库 `bcs` 时，必须使用 MCP `bcs`
 
 
 ## 5. Skills 使用规范

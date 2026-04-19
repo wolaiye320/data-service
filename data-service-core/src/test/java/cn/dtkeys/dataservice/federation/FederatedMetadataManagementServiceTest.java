@@ -154,6 +154,39 @@ class FederatedMetadataManagementServiceTest {
     }
 
     @Test
+    void shouldSaveFederatedSqlDraftAsNextServiceVersionWhenCurrentSqlVersionMissing() {
+        OperatorContext.setOperator("dev-a");
+        OperatorContext.setRole("DEVELOPER");
+        DSDefinition definition = new DSDefinition();
+        definition.setId(6L);
+        definition.setServiceCode("federated_customer_next");
+        definition.setServiceType("FEDERATED_QUERY");
+        definition.setVersion(1);
+        definition.setPlanStatus("UNPLANNED");
+        when(dsDefinitionRepository.findById(6L)).thenReturn(definition);
+        when(dsSourceRepository.findByServiceId(6L)).thenReturn(List.of(source("pg_customer"), source("mysql_order")));
+        DSSqlText sqlText = new DSSqlText();
+        sqlText.setServiceId(6L);
+        sqlText.setVersion(2);
+        sqlText.setSqlText("select id from pg_customer");
+        when(dsSqlTextRepository.findLatestDraftByServiceId(6L)).thenReturn(sqlText);
+        when(dsSqlValidateLogRepository.findByServiceIdAndVersion(6L, 2)).thenReturn(List.of());
+        when(dsSqlPlanRepository.findByServiceIdAndVersion(6L, 2)).thenReturn(List.of());
+
+        federatedMetadataManagementService.saveFederatedSqlDraft(
+            6L,
+            "select pg_customer.id, mysql_order.customer_id from pg_customer join mysql_order on pg_customer.id = mysql_order.customer_id",
+            "next draft"
+        );
+
+        ArgumentCaptor<DSSqlText> sqlTextCaptor = ArgumentCaptor.forClass(DSSqlText.class);
+        verify(dsSqlTextRepository).insert(sqlTextCaptor.capture());
+        assertThat(sqlTextCaptor.getValue().getVersion()).isEqualTo(2);
+        verify(dsSqlValidateLogRepository).deleteByServiceIdAndVersion(6L, 2);
+        verify(dsSqlPlanRepository).deleteByServiceIdAndVersion(6L, 2);
+    }
+
+    @Test
     void shouldRejectUnsupportedDialectExpressionWhenSavingFederatedSqlDraft() {
         DSDefinition definition = new DSDefinition();
         definition.setId(4L);

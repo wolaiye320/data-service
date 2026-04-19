@@ -125,7 +125,7 @@ public class FederatedRuntimeQueryExecutor {
             queryTimeoutSeconds,
             maxResultRows
         );
-        return queryResultMapper.map(rawRows, sourceFields(runtimeDefinition.fields(), runtimeSource));
+        return queryResultMapper.map(rawRows, stageSql.sourceFields());
     }
 
     private StageSql buildStageSql(DataServiceRuntimeDefinition runtimeDefinition,
@@ -134,7 +134,8 @@ public class FederatedRuntimeQueryExecutor {
                                    List<Map<String, Object>> parentRows,
                                    boolean lookupDriven) {
         String sourceRef = currentSourceReference(runtimeSource);
-        String projection = sourceFields(runtimeDefinition.fields(), runtimeSource).stream()
+        List<DSField> stageFields = stageFields(runtimeDefinition.fields(), runtimeSource);
+        String projection = stageFields.stream()
             .map(field -> field.getSourceColumn() + " as " + runtimeSource.source().getSourceAlias() + "_" + field.getSourceColumn())
             .collect(Collectors.joining(", "));
         if (projection.isBlank()) {
@@ -153,7 +154,7 @@ public class FederatedRuntimeQueryExecutor {
             }
         }
         if (lookupDriven && (lookupValues == null || lookupValues.isEmpty())) {
-            return StageSql.empty(sourceFields(runtimeDefinition.fields(), runtimeSource));
+            return StageSql.empty(stageFields);
         }
 
         List<DSParam> allParams = new ArrayList<>(runtimeDefinition.params());
@@ -161,14 +162,14 @@ public class FederatedRuntimeQueryExecutor {
             allParams.add(lookupParam);
         }
         StringBuilder sqlBuilder = new StringBuilder("select ").append(projection)
-            .append(" from ").append(runtimeSource.source().getSourceValue());
+            .append(" from ").append(resolveSourceRelation(runtimeSource));
         if (!predicates.isEmpty()) {
             sqlBuilder.append(" where ").append(String.join(" and ", predicates));
         }
         sqlBuilder.append(" order by ").append(resolveJoinKeyField(runtimeDefinition.fields(), runtimeSource).getSourceColumn());
         String finalSql = sqlBuilder.toString();
         List<DSParam> usedParams = filterParamDefinitions(finalSql, allParams);
-        return new StageSql(finalSql, usedParams, lookupValues, sourceFields(runtimeDefinition.fields(), runtimeSource));
+        return new StageSql(finalSql, usedParams, lookupValues, stageFields);
     }
 
     private List<String> extractLocalPredicates(String whereClause,
@@ -302,6 +303,14 @@ public class FederatedRuntimeQueryExecutor {
     }
 
     private DSField resolveJoinKeyField(List<DSField> fields, DataServiceRuntimeSource runtimeSource) {
+        String configuredJoinKey = runtimeSource.source().getJoinKey();
+        if (configuredJoinKey != null && !configuredJoinKey.isBlank()) {
+            String normalizedJoinKey = normalize(configuredJoinKey);
+            return sourceFields(fields, runtimeSource).stream()
+                .filter(field -> normalize(field.getSourceColumn()).equals(normalizedJoinKey))
+                .findFirst()
+                .orElseGet(() -> syntheticJoinKeyField(runtimeSource, configuredJoinKey));
+        }
         return sourceFields(fields, runtimeSource).stream()
             .filter(field -> Boolean.TRUE.equals(field.getJoinKey()))
             .findFirst()
@@ -309,10 +318,32 @@ public class FederatedRuntimeQueryExecutor {
                 + runtimeSource.source().getSourceAlias()));
     }
 
+    private DSField syntheticJoinKeyField(DataServiceRuntimeSource runtimeSource, String joinKeyColumn) {
+        DSField field = new DSField();
+        field.setSourceAlias(runtimeSource.source().getSourceAlias());
+        field.setSourceColumn(joinKeyColumn);
+        field.setFieldName(joinKeyColumn);
+        field.setDisplayName(joinKeyColumn);
+        field.setFieldType("STRING");
+        field.setJoinKey(true);
+        return field;
+    }
+
     private List<DSField> sourceFields(List<DSField> fields, DataServiceRuntimeSource runtimeSource) {
         return fields.stream()
             .filter(field -> normalize(field.getSourceAlias()).equals(normalize(runtimeSource.source().getSourceAlias())))
             .toList();
+    }
+
+    private List<DSField> stageFields(List<DSField> fields, DataServiceRuntimeSource runtimeSource) {
+        List<DSField> sourceFields = new ArrayList<>(sourceFields(fields, runtimeSource));
+        DSField joinKeyField = resolveJoinKeyField(fields, runtimeSource);
+        boolean joinKeyPresent = sourceFields.stream()
+            .anyMatch(field -> normalize(field.getSourceColumn()).equals(normalize(joinKeyField.getSourceColumn())));
+        if (!joinKeyPresent) {
+            sourceFields.add(joinKeyField);
+        }
+        return List.copyOf(sourceFields);
     }
 
     private List<DSParam> filterParamDefinitions(String sql, List<DSParam> allParams) {
@@ -387,6 +418,23 @@ public class FederatedRuntimeQueryExecutor {
         return runtimeSource.source().getSourceAlias() == null || runtimeSource.source().getSourceAlias().isBlank()
             ? runtimeSource.source().getSourceValue()
             : runtimeSource.source().getSourceAlias();
+    }
+
+    private String resolveSourceRelation(DataServiceRuntimeSource runtimeSource) {
+        String sourceValue = runtimeSource.source().getSourceValue();
+        if (sourceValue == null || sourceValue.isBlank() || sourceValue.contains(".")) {
+            return sourceValue;
+        }
+        if (runtimeSource.catalog() == null || runtimeSource.catalog().getCatalogValue() == null
+            || runtimeSource.catalog().getCatalogValue().isBlank()) {
+            return sourceValue;
+        }
+        String catalogType = normalize(runtimeSource.catalog().getCatalogType());
+        String dbType = normalize(runtimeSource.connection().getDbType());
+        if ("schema".equals(catalogType) || ("database".equals(catalogType) && "mysql".equals(dbType))) {
+            return runtimeSource.catalog().getCatalogValue() + "." + sourceValue;
+        }
+        return sourceValue;
     }
 
     private String normalize(String value) {

@@ -23,7 +23,7 @@
 | 文件 | 用途 | 直接依赖 | 谁会调用它 |
 |---|---|---|---|
 | `git-guide.sh` | 输出推荐流程说明 | 无 | 人直接执行 |
-| `git-review.sh` | 输出仓库状态、暂存区、相对基线改动摘要 | Git 命令 | 人直接执行；`git-check.sh` |
+| `git-review.sh` | 输出仓库状态、暂存区与当前未提交改动摘要 | Git 命令 | 人直接执行；`git-check.sh` |
 | `git-stage.sh` | 按路径暂存文件；默认替换整个暂存区，可 `--append` 追加 | Git 命令 | 人直接执行；`git-workflow.sh`；`git-workflow-auto.sh` |
 | `git-check.sh` | 对暂存区做审阅和 gate 检查，可选执行 pre-push hook | `lib/git-common.sh`、`lib/git-index-guards.sh` | 人直接执行；`git-prepare-commit.sh` |
 | `git-hook.config.sh` | hook 通用默认配置，负责加载项目覆盖配置 | 无 | `git-hook-commit-msg.sh`、`git-hook-pre-push.sh`、`lib/git-index-guards.sh` |

@@ -43,8 +43,13 @@ public class GlobalExceptionHandler {
                 HttpStatus.INTERNAL_SERVER_ERROR;
             default -> HttpStatus.BAD_REQUEST;
         };
-        log.warn("business_exception path={} code={} message={}",
-            request.getRequestURI(), exception.getErrorCode().name(), exception.getMessage());
+        if (exception.getCause() != null) {
+            log.warn("business_exception path={} code={} message={}",
+                request.getRequestURI(), exception.getErrorCode().name(), exception.getMessage(), exception);
+        } else {
+            log.warn("business_exception path={} code={} message={}",
+                request.getRequestURI(), exception.getErrorCode().name(), exception.getMessage());
+        }
         return ResponseEntity.status(status)
             .body(ApiResponse.failure(exception.getErrorCode(), exception.getMessage(), buildMeta()));
     }

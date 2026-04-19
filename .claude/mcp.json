@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "discuz": {
-      "command": "mcp-server-mysql",
+      "command": "/Users/sougen/.local/bin/mcp-server-mysql",
       "envFile": "/Users/sougen/.mysql.env"
     },
     "data_service": {
@@ -22,9 +22,12 @@
         "postgresql://sougen@localhost:5432/bankdb?transaction_read_only=off"
       ]
     },
-    "figma": {
-      "url": "https://mcp.figma.com/mcp",
-      "type": "http"
+    "bcs": {
+      "command": "/Users/sougen/.local/bin/mcp-server-mysql",
+      "envFile": "/Users/sougen/.mysql.env",
+      "env": {
+        "MYSQL_DATABASE": "bcs"
+      }
     }
   }
 }
