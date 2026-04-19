@@ -216,8 +216,8 @@ class PredefinedJoinQueryExecutorTest {
                 customer_name as customer_base_customer_name,
                 active as customer_base_active
             from customer_base
-            where active = :active
-              and customer_id in (:customerIds)
+            where active = /* active */false
+              and customer_id in (/* customerIds */(0))
             """);
 
         return new DataServiceRuntimeDefinition(
@@ -259,7 +259,7 @@ class PredefinedJoinQueryExecutorTest {
                   "lookupSourceColumn": "customer_id",
                   "parentJoinField": "customerId",
                   "childJoinField": "orderCustomerId",
-                  "childSqlTemplate": "select customer_id as customer_order_ext_customer_id, order_amount as customer_order_ext_order_amount from customer_order_ext where customer_id in (:customerIds)"
+                  "childSqlTemplate": "select customer_id as customer_order_ext_customer_id, order_amount as customer_order_ext_order_amount from customer_order_ext where customer_id in (/* customerIds */(0))"
                 }
                 """);
         }
