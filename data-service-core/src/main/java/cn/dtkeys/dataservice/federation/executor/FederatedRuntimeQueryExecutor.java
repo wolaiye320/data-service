@@ -147,7 +147,7 @@ public class FederatedRuntimeQueryExecutor {
             DSField joinKeyField = resolveJoinKeyField(runtimeDefinition.fields(), runtimeSource);
             lookupValues = extractJoinValues(parentRows, resolvePrimaryJoinField(runtimeDefinition.fields(), runtimeDefinition.sources()));
             if (!lookupValues.isEmpty()) {
-                predicates.add(joinKeyField.getSourceColumn() + " in (:" + LOOKUP_PARAM_NAME + ")");
+                predicates.add(joinKeyField.getSourceColumn() + " in (/* " + LOOKUP_PARAM_NAME + " */(0))");
                 lookupParam = listParam(LOOKUP_PARAM_NAME);
             }
         }

@@ -244,7 +244,7 @@ class AdminManagementIntegrationTest {
               "serviceCode": "customer_profile_draft",
               "serviceName": "客户画像草稿",
               "serviceType": "SIMPLE_QUERY",
-              "sqlTemplate": "select customer_id as customer_customer_id from customer_order where customer_id = :customerId",
+              "sqlTemplate": "select customer_id as customer_customer_id from customer_order where customer_id = /* customerId */0",
               "sqlType": "SIMPLE_SQL",
               "executionMode": "REMOTE_ONLY",
               "planStatus": "UNPLANNED",
@@ -306,7 +306,7 @@ class AdminManagementIntegrationTest {
               "serviceCode": "customer_profile_draft",
               "serviceName": "客户画像草稿更新",
               "serviceType": "SIMPLE_QUERY",
-              "sqlTemplate": "select customer_id as customer_customer_id, active as customer_active from customer_order where customer_id = :customerId",
+              "sqlTemplate": "select customer_id as customer_customer_id, active as customer_active from customer_order where customer_id = /* customerId */0",
               "sqlType": "SIMPLE_SQL",
               "executionMode": "REMOTE_ONLY",
               "planStatus": "UNPLANNED",
@@ -458,7 +458,7 @@ class AdminManagementIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
-                      "federatedSqlText": "select pg_customer.id, mysql_order.customer_id from pg_customer join mysql_order on pg_customer.id = mysql_order.customer_id where pg_customer.id = :customerId",
+                      "federatedSqlText": "select pg_customer.id, mysql_order.customer_id from pg_customer join mysql_order on pg_customer.id = mysql_order.customer_id where pg_customer.id = /* customerId */0",
                       "sqlComment": "federated draft"
                     }
                     """))
@@ -562,7 +562,7 @@ class AdminManagementIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
-                      "federatedSqlText": "select fed_customer.customer_id, fed_customer.customer_name, fed_order.order_amount from fed_customer join fed_order on fed_customer.customer_id = fed_order.customer_id where fed_customer.customer_id = :customerId",
+                      "federatedSqlText": "select fed_customer.customer_id, fed_customer.customer_name, fed_order.order_amount from fed_customer join fed_order on fed_customer.customer_id = fed_order.customer_id where fed_customer.customer_id = /* customerId */0",
                       "params": {
                         "customerId": 9001
                       }
@@ -602,7 +602,7 @@ class AdminManagementIntegrationTest {
                 .header("X-Operator-Role", "DEVELOPER")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(simpleServiceCreateRequest("customer_profile_draft",
-                    "select customer_id as customer_customer_id from customer_order where customer_id = :customerId")))
+                    "select customer_id as customer_customer_id from customer_order where customer_id = /* customerId */0")))
             .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/admin/service-definitions/1/publish")
@@ -653,7 +653,7 @@ class AdminManagementIntegrationTest {
                 .header("X-Operator-Role", "DEVELOPER")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(simpleServiceCreateRequest("delete_me_service",
-                    "select customer_id as customer_customer_id from customer_order where customer_id = :customerId")))
+                    "select customer_id as customer_customer_id from customer_order where customer_id = /* customerId */0")))
             .andExpect(status().isOk());
 
         mockMvc.perform(delete("/api/admin/service-definitions/1")
@@ -681,7 +681,7 @@ class AdminManagementIntegrationTest {
                 .header("X-Operator-Role", "DEVELOPER")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(simpleServiceCreateRequest("delete_me_service",
-                    "select customer_id as customer_customer_id from customer_order where customer_id = :customerId")))
+                    "select customer_id as customer_customer_id from customer_order where customer_id = /* customerId */0")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.definition.serviceCode").value("delete_me_service"));
     }
@@ -705,7 +705,7 @@ class AdminManagementIntegrationTest {
                 .header("X-Operator-Role", "DEVELOPER")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(simpleServiceCreateRequest("customer_profile_draft",
-                    "select customer_id as customer_customer_id from customer_order where customer_id = :customerId")))
+                    "select customer_id as customer_customer_id from customer_order where customer_id = /* customerId */0")))
             .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/admin/service-definitions/1/publish")
@@ -726,7 +726,7 @@ class AdminManagementIntegrationTest {
                 .header("X-Operator-Role", "DEVELOPER"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data[0].version").value(1))
-            .andExpect(jsonPath("$.data[0].sqlDefinitionJson").value(org.hamcrest.Matchers.containsString(":customerId")));
+            .andExpect(jsonPath("$.data[0].sqlDefinitionJson").value(org.hamcrest.Matchers.containsString("/* customerId */0")));
     }
 
     @Test
@@ -861,7 +861,7 @@ class AdminManagementIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
-                      "federatedSqlText": "select pg_customer.customer_id, pg_customer.customer_name, pg_order.order_amount from pg_customer join pg_order on pg_customer.customer_id = pg_order.customer_id where pg_customer.customer_id = :customerId",
+                      "federatedSqlText": "select pg_customer.customer_id, pg_customer.customer_name, pg_order.order_amount from pg_customer join pg_order on pg_customer.customer_id = pg_order.customer_id where pg_customer.customer_id = /* customerId */0",
                       "sqlComment": "preview source joinKey"
                     }
                     """))
@@ -873,7 +873,7 @@ class AdminManagementIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
-                      "federatedSqlText": "select pg_customer.customer_id, pg_customer.customer_name, pg_order.order_amount from pg_customer join pg_order on pg_customer.customer_id = pg_order.customer_id where pg_customer.customer_id = :customerId",
+                      "federatedSqlText": "select pg_customer.customer_id, pg_customer.customer_name, pg_order.order_amount from pg_customer join pg_order on pg_customer.customer_id = pg_order.customer_id where pg_customer.customer_id = /* customerId */0",
                       "params": {
                         "customerId": 3001
                       }

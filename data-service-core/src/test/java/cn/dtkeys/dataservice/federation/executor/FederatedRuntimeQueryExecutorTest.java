@@ -70,11 +70,11 @@ class FederatedRuntimeQueryExecutorTest {
                 select pg_customer.customer_name, mysql_order.order_amount
                 from pg_customer
                 join mysql_order on pg_customer.customer_code = mysql_order.customer_code
-                where pg_customer.customer_code = :customerCode
+                where pg_customer.customer_code = /* customerCode */''
                 """.trim(),
             List.of("pg_customer.customer_name", "mysql_order.order_amount"),
             List.of("pg_customer", "mysql_order"),
-            "pg_customer.customer_code = :customerCode",
+            "pg_customer.customer_code = /* customerCode */''",
             true
         );
         FederatedPlan plan = new FederatedPlan(
@@ -128,6 +128,9 @@ class FederatedRuntimeQueryExecutorTest {
             "customerName", "Alice",
             "orderAmount", 128.00
         ));
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(queryParameterBinder, times(2)).bind(sqlCaptor.capture(), any(), anyMap());
+        assertThat(sqlCaptor.getAllValues().get(1)).contains("customer_code in (/* federatedLookupValues */(0))");
     }
 
     @Test
@@ -138,11 +141,11 @@ class FederatedRuntimeQueryExecutorTest {
                 select pg_customer.customer_code, pg_customer.customer_name, mysql_order.order_amount
                 from pg_customer
                 join mysql_order on pg_customer.customer_code = mysql_order.customer_code
-                where pg_customer.customer_code = :customerCode
+                where pg_customer.customer_code = /* customerCode */''
                 """.trim(),
             List.of("pg_customer.customer_code", "pg_customer.customer_name", "mysql_order.order_amount"),
             List.of("pg_customer", "mysql_order"),
-            "pg_customer.customer_code = :customerCode",
+            "pg_customer.customer_code = /* customerCode */''",
             true
         );
         FederatedPlan plan = new FederatedPlan(
@@ -200,7 +203,7 @@ class FederatedRuntimeQueryExecutorTest {
             select pg_customer.customer_name, mysql_order.order_amount
             from pg_customer
             join mysql_order on pg_customer.customer_code = mysql_order.customer_code
-            where pg_customer.customer_code = :customerCode
+            where pg_customer.customer_code = /* customerCode */''
             """);
 
         return new DataServiceRuntimeDefinition(
@@ -223,7 +226,7 @@ class FederatedRuntimeQueryExecutorTest {
             select pg_customer.customer_code, pg_customer.customer_name, mysql_order.order_amount
             from pg_customer
             join mysql_order on pg_customer.customer_code = mysql_order.customer_code
-            where pg_customer.customer_code = :customerCode
+            where pg_customer.customer_code = /* customerCode */''
             """);
 
         return new DataServiceRuntimeDefinition(

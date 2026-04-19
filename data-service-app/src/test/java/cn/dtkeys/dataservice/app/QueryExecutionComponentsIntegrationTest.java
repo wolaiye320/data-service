@@ -160,7 +160,7 @@ class QueryExecutionComponentsIntegrationTest {
         serviceVersion.setParamDefinitionJson(objectMapper.writeValueAsString(params));
         serviceVersion.setFieldDefinitionJson(objectMapper.writeValueAsString(fields));
         serviceVersion.setSqlDefinitionJson("""
-            {"sqlTemplate":"select customer_id as customer_customer_id, order_amount as customer_order_amount, active as customer_active from customer_order where customer_id = :customerId and active = :active order by customer_id","sqlType":"SIMPLE_SQL","executionMode":"REMOTE_ONLY","planStatus":"PUBLISHED"}
+            {"sqlTemplate":"select customer_id as customer_customer_id, order_amount as customer_order_amount, active as customer_active from customer_order where customer_id = /* customerId */0 and active = /* active */false order by customer_id","sqlType":"SIMPLE_SQL","executionMode":"REMOTE_ONLY","planStatus":"PUBLISHED"}
             """);
         serviceVersion.setCreatedBy("tester");
         dsServiceVersionRepository.insert(serviceVersion);
@@ -239,8 +239,8 @@ class QueryExecutionComponentsIntegrationTest {
                 order_amount as customer_order_amount,
                 active as customer_active
             from customer_order
-            where customer_id = :customerId
-              and active = :active
+            where customer_id = /* customerId */0
+              and active = /* active */false
             order by customer_id
             """);
         definition.setSqlType("SIMPLE_SQL");

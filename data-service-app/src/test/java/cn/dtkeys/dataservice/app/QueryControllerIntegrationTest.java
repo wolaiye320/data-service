@@ -1083,8 +1083,8 @@ class QueryControllerIntegrationTest {
                 customer_name as customer_base_customer_name,
                 active as customer_base_active
             from customer_base
-            where active = :active
-              and customer_id in (:customerIds)
+            where active = /* active */false
+              and customer_id in (/* customerIds */(0))
             order by customer_id
             """);
         definition.setSqlType("SIMPLE_SQL");
@@ -1125,7 +1125,7 @@ class QueryControllerIntegrationTest {
               "lookupSourceColumn": "customer_id",
               "parentJoinField": "customerId",
               "childJoinField": "orderCustomerId",
-              "childSqlTemplate": "select customer_id as customer_order_ext_customer_id, order_amount as customer_order_ext_order_amount from customer_order_ext where customer_id in (:customerIds)"
+              "childSqlTemplate": "select customer_id as customer_order_ext_customer_id, order_amount as customer_order_ext_order_amount from customer_order_ext where customer_id in (/* customerIds */(0))"
             }
             """);
         childSource.setStatus("ENABLED");
@@ -1231,7 +1231,7 @@ class QueryControllerIntegrationTest {
             select pg_customer.customer_id, pg_customer.customer_name, %s.order_amount
             from pg_customer
             join %s on pg_customer.customer_id = %s.customer_id
-            where pg_customer.customer_id = :customerId
+            where pg_customer.customer_id = /* customerId */0
             """.formatted(childAlias, childAlias, childAlias));
         definition.setSqlType("FEDERATED_SQL");
         definition.setExecutionMode("REMOTE_PLUS_LOCAL");
@@ -1313,8 +1313,8 @@ class QueryControllerIntegrationTest {
                     order_amount as customer_order_amount,
                     active as customer_active
                 from customer_order
-                where customer_id = :customerId
-                  and active = :active
+                where customer_id = /* customerId */0
+                  and active = /* active */false
                   and pg_sleep(3) is null
                 order by customer_id
                 """;
@@ -1326,8 +1326,8 @@ class QueryControllerIntegrationTest {
                     order_amount as customer_order_amount,
                     active as customer_active
                 from customer_order_limit
-                where customer_id >= :customerId
-                  and active = :active
+                where customer_id >= /* customerId */0
+                  and active = /* active */false
                 order by customer_id
                 """;
         }
@@ -1337,8 +1337,8 @@ class QueryControllerIntegrationTest {
                 order_amount as customer_order_amount,
                 active as customer_active
             from customer_order
-            where customer_id = :customerId
-              and active = :active
+            where customer_id = /* customerId */0
+              and active = /* active */false
             order by customer_id
             """;
     }
