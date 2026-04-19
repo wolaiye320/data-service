@@ -4,6 +4,7 @@ import cn.dtkeys.dataservice.service.model.DSDefinition;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
+import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Result;
 import org.apache.ibatis.annotations.Results;
 import org.apache.ibatis.annotations.Select;
@@ -143,4 +144,13 @@ public interface DSDefinitionRepository {
         where id = #{id} and deleted = false
         """)
     int update(DSDefinition definition);
+
+    @Update("""
+        update ds_service
+        set deleted = true,
+            updated_by = #{operator},
+            updated_at = current_timestamp
+        where id = #{id} and deleted = false
+        """)
+    int softDeleteById(@Param("id") Long id, @Param("operator") String operator);
 }

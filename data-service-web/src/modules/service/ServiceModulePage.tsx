@@ -4,36 +4,59 @@ import {
   Alert,
   Button,
   Card,
+  Collapse,
   Descriptions,
   Drawer,
+  Empty,
   Form,
   Input,
   InputNumber,
+  Pagination,
   Select,
   Space,
   Spin,
   Table,
   Typography,
+  Tag,
 } from 'antd'
 import {
   EditOutlined,
   RocketOutlined,
   StopOutlined,
   DeleteOutlined,
+  SaveOutlined,
+  PlayCircleOutlined,
+  SearchOutlined,
+  CheckOutlined,
+  CodeOutlined,
+  TableOutlined,
+  InfoCircleOutlined,
+  DatabaseOutlined,
+  SettingOutlined,
+  ReloadOutlined,
+  PlusOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { ActionIconButton } from '../../components/ActionIconButton'
 import { useAppFeedback } from '../../components/useAppFeedback'
-import { getJson, postJson, putJson, resolveErrorMessage } from '../../services/http'
+import { deleteJson, getJson, postJson, putJson, resolveErrorMessage } from '../../services/http'
 import type {
+  CatalogItem,
   ConnectionItem,
+  ConnectionDetail,
+  FederatedMetadata,
+  FederatedPreviewRequest,
   FieldItem,
   ParamItem,
+  SqlAutoDetectResponse,
   ServiceDefinition,
   ServiceDefinitionDetail,
   ServiceDefinitionUpsertPayload,
   ServiceVersionItem,
+  SourceCapabilityItem,
   SourceItem,
+  SqlPlanItem,
+  SqlValidateLogItem,
 } from '../../types/admin'
 
 const DEFAULT_DEFINITION: ServiceDefinitionUpsertPayload = {
@@ -43,18 +66,43 @@ const DEFAULT_DEFINITION: ServiceDefinitionUpsertPayload = {
   status: 'DRAFT',
   sqlTemplate: 'select 1 as demo_value',
   sqlType: 'SIMPLE_SQL',
-  executionMode: 'REMOTE_ONLY',
-  planStatus: 'UNPLANNED',
   currentSqlVersion: 0,
   version: 0,
-  maxBatchSize: 20,
-  maxResultRows: 200,
-  queryTimeoutSeconds: 20,
-  federatedQueryTimeoutSeconds: 40,
   remark: '',
   sources: [],
   params: [],
   fields: [],
+}
+
+const FEDERATED_DEFAULTS: Partial<ServiceDefinitionUpsertPayload> = {
+  serviceType: 'FEDERATED_QUERY',
+  sqlTemplate: '',
+  sqlType: 'FEDERATED_SQL',
+}
+
+type SqlDraftForm = {
+  federatedSqlText: string
+  sqlComment?: string
+}
+
+type PreviewForm = {
+  paramsText: string
+}
+
+type AutoDetectForm = {
+  draftSqlText: string
+  defaultConnectionId?: number
+  defaultCatalogId?: number
+}
+
+type PreviewResult = {
+  rows: Array<Record<string, unknown>>
+  meta: Record<string, unknown>
+}
+
+type CapabilityRow = SourceCapabilityItem & {
+  connectionCode: string
+  connectionName: string
 }
 
 function renderServiceStatusText(status: string) {
@@ -67,19 +115,266 @@ function renderServiceStatusText(status: string) {
   return <span className="status-text">草稿</span>
 }
 
-export function ServiceModulePage() {
+function renderPlanStatusText(status: string) {
+  if (status === 'PLANNED') {
+    return <span className="status-text">已规划</span>
+  }
+  if (status === 'PUBLISHED') {
+    return <span className="status-text-success">已发布</span>
+  }
+  return <span className="status-text">未规划</span>
+}
+
+function renderSqlTypeText(sqlType: string) {
+  return sqlType === 'FEDERATED_SQL' ? '联邦 SQL' : '简单 SQL'
+}
+
+function renderValidateResultText(result: string) {
+  if (result === 'PASS') {
+    return <span className="status-text-success">通过</span>
+  }
+  if (result === 'FAIL') {
+    return <span className="status-text-error">失败</span>
+  }
+  return <span className="status-text">{result}</span>
+}
+
+function isFederatedDefinition(definition?: { sqlType?: string | null; serviceType?: string | null } | null) {
+  return definition?.sqlType === 'FEDERATED_SQL' || definition?.serviceType === 'FEDERATED_QUERY'
+}
+
+function inferExecutionMode(values?: {
+  sqlType?: string | null
+  serviceType?: string | null
+  sqlTemplate?: string | null
+  sources?: SourceItem[] | null
+}) {
+  if (values?.sqlType === 'FEDERATED_SQL' || values?.serviceType === 'FEDERATED_QUERY') {
+    return 'REMOTE_PLUS_LOCAL'
+  }
+  if ((values?.sources?.length ?? 0) > 1) {
+    return 'REMOTE_PLUS_LOCAL'
+  }
+  if (values?.sqlTemplate?.toUpperCase().includes(' JOIN ')) {
+    return 'REMOTE_PLUS_LOCAL'
+  }
+  return 'REMOTE_ONLY'
+}
+
+function inferPlanStatus(values?: { sqlType?: string | null; status?: string | null }) {
+  if (values?.status === 'PUBLISHED') {
+    return 'PUBLISHED'
+  }
+  return values?.sqlType === 'FEDERATED_SQL' ? 'PLANNED' : 'UNPLANNED'
+}
+
+function renderExecutionModeLabel(executionMode: string) {
+  return executionMode === 'REMOTE_PLUS_LOCAL' ? '远端优先 + 本地补算' : '远端执行'
+}
+
+function renderPlanStatusLabel(planStatus: string) {
+  if (planStatus === 'PUBLISHED') {
+    return '已发布'
+  }
+  if (planStatus === 'PLANNED') {
+    return '已规划'
+  }
+  return '未规划'
+}
+
+function safePrettyJson(raw?: string | null) {
+  if (!raw) {
+    return '-'
+  }
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
+}
+
+function parseJsonObject(text: string, fieldName: string) {
+  if (!text?.trim()) {
+    return {}
+  }
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(`${fieldName} 必须是有效的 JSON 对象`)
+  }
+}
+
+function EditableSection({
+  title,
+  actionLabel,
+  emptyText,
+  onAdd,
+  children,
+}: {
+  title: string
+  actionLabel: string
+  emptyText: string
+  onAdd: () => void
+  children: ReactNode
+}) {
+  const hasChildren = Array.isArray(children) ? children.length > 0 : Boolean(children)
+  return (
+    <div className="editable-section">
+      <div className="editable-section-header">
+        <span className="editable-section-title">{title}</span>
+        <Button type="link" size="small" onClick={onAdd}>
+          + {actionLabel}
+        </Button>
+      </div>
+      {hasChildren ? (
+        <div className="editable-section-content">{children}</div>
+      ) : (
+        <div className="editable-section-empty">
+          <span>{emptyText}</span>
+          <Button type="link" size="small" onClick={onAdd}>
+            立即添加
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function buildPreviewColumns(rows: Array<Record<string, unknown>>): ColumnsType<Record<string, unknown>> {
+  if (rows.length === 0) {
+    return []
+  }
+  return Object.keys(rows[0]).map((key) => ({
+    title: key,
+    dataIndex: key,
+    key,
+    render: (value: unknown) => {
+      if (value === null || value === undefined) {
+        return <span className="text-gray-400">NULL</span>
+      }
+      if (typeof value === 'object') {
+        return <pre className="text-xs">{JSON.stringify(value, null, 2)}</pre>
+      }
+      return String(value)
+    },
+  }))
+}
+
+function ValidateLogPanel({ logs }: { logs: SqlValidateLogItem[] }) {
+  if (logs.length === 0) {
+    return <Alert type="info" showIcon message="暂无校验日志" />
+  }
+  return (
+    <Space direction="vertical" size={8} style={{ width: '100%' }}>
+      {logs.map((log) => (
+        <Card key={log.id} size="small">
+          <Space direction="vertical" size={4} style={{ width: '100%' }}>
+            <Space>
+              <Typography.Text strong>阶段: {log.validateStage}</Typography.Text>
+              {renderValidateResultText(log.result)}
+            </Space>
+            {log.message ? <Typography.Text type="secondary">{log.message}</Typography.Text> : null}
+          </Space>
+        </Card>
+      ))}
+    </Space>
+  )
+}
+
+function PlanPanel({ plans }: { plans: SqlPlanItem[] }) {
+  if (plans.length === 0) {
+    return <Alert type="info" showIcon message="暂无计划产物" />
+  }
+  return (
+    <Space direction="vertical" size={8} style={{ width: '100%' }}>
+      {plans.map((plan) => (
+        <Card key={plan.id} size="small" title={`阶段 ${plan.planStage}`}>
+          <Descriptions size="small" column={2}>
+            <Descriptions.Item label="格式">{plan.planFormat || '-'}</Descriptions.Item>
+            <Descriptions.Item label="下推摘要">{plan.pushdownSummary || '-'}</Descriptions.Item>
+            <Descriptions.Item label="回退原因">{plan.fallbackReason || '-'}</Descriptions.Item>
+            <Descriptions.Item label="成本摘要">{plan.costSummary || '-'}</Descriptions.Item>
+            <Descriptions.Item label="本地执行摘要">{plan.localExecutionSummary || '-'}</Descriptions.Item>
+            <Descriptions.Item label="数据源范围">{plan.datasourceScope || '-'}</Descriptions.Item>
+          </Descriptions>
+          {plan.planContent && (
+            <Descriptions size="small" column={1} style={{ marginTop: 8 }}>
+              <Descriptions.Item label="计划内容">
+                <pre style={{ fontSize: 11, overflow: 'auto', maxHeight: 200 }}>{plan.planContent}</pre>
+              </Descriptions.Item>
+            </Descriptions>
+          )}
+        </Card>
+      ))}
+    </Space>
+  )
+}
+
+function CapabilityPanel({ rows }: { rows: CapabilityRow[] }) {
+  if (rows.length === 0) {
+    return <Alert type="info" showIcon message="暂无来源能力数据" />
+  }
+  return (
+    <Table<CapabilityRow>
+      rowKey={(record) => `${record.connectionId}-${record.capabilityCode}-${record.scopeValue || ''}`}
+      size="small"
+      pagination={false}
+      dataSource={rows}
+      columns={[
+        { title: '连接', dataIndex: 'connectionName' },
+        { title: '数据库类型', dataIndex: 'dbType' },
+        { title: '能力代码', dataIndex: 'capabilityCode' },
+        { title: '能力值', dataIndex: 'capabilityValue' },
+        { title: '范围', dataIndex: 'scope' },
+        { title: '范围值', dataIndex: 'scopeValue' },
+      ]}
+    />
+  )
+}
+
+export default function ServiceModulePage() {
   const { message } = useAppFeedback()
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [workspaceLoading, setWorkspaceLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [sqlSaving, setSqlSaving] = useState(false)
   const [actionLoading, setActionLoading] = useState<number | null>(null)
+  const [previewExecuting, setPreviewExecuting] = useState(false)
+  const [detectingSql, setDetectingSql] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [definitions, setDefinitions] = useState<ServiceDefinition[]>([])
+  const [searchKeyword, setSearchKeyword] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [detail, setDetail] = useState<ServiceDefinitionDetail | null>(null)
   const [versions, setVersions] = useState<ServiceVersionItem[]>([])
   const [connections, setConnections] = useState<ConnectionItem[]>([])
+  const [connectionCatalogs, setConnectionCatalogs] = useState<Record<number, CatalogItem[]>>({})
+  const [metadata, setMetadata] = useState<FederatedMetadata | null>(null)
+  const [capabilities, setCapabilities] = useState<Record<number, SourceCapabilityItem[]>>({})
+  const [previewResult, setPreviewResult] = useState<PreviewResult | null>(null)
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const [editingDefinition, setEditingDefinition] = useState<ServiceDefinition | null>(null)
   const [form] = Form.useForm<ServiceDefinitionUpsertPayload>()
+  const [autoDetectForm] = Form.useForm<AutoDetectForm>()
+  const [sqlForm] = Form.useForm<SqlDraftForm>()
+  const [previewForm] = Form.useForm<PreviewForm>()
+
+  async function ensureConnectionCatalogs(connectionId?: number) {
+    if (!connectionId || connectionCatalogs[connectionId]) {
+      return
+    }
+    try {
+      const response = await getJson<ConnectionDetail>(`/api/admin/connections/${connectionId}`)
+      setConnectionCatalogs((current) => ({
+        ...current,
+        [connectionId]: response.data.catalogs,
+      }))
+    } catch (err) {
+      message.error(resolveErrorMessage(err))
+    }
+  }
 
   async function loadDefinitions(nextSelectedId?: number | null) {
     setLoading(true)
@@ -99,171 +394,251 @@ export function ServiceModulePage() {
     }
   }
 
-  async function loadDetail(id: number) {
-    const [detailResponse, versionsResponse] = await Promise.all([
-      getJson<ServiceDefinitionDetail>(`/api/admin/service-definitions/${id}`),
-      getJson<ServiceVersionItem[]>(`/api/admin/service-definitions/${id}/versions`),
-    ])
-    setDetail(detailResponse.data)
-    setVersions(versionsResponse.data)
+  async function loadWorkspace(id: number) {
+    setWorkspaceLoading(true)
+    try {
+      const [detailResponse, versionsResponse] = await Promise.all([
+        getJson<ServiceDefinitionDetail>(`/api/admin/service-definitions/${id}`),
+        getJson<ServiceVersionItem[]>(`/api/admin/service-definitions/${id}/versions`),
+      ])
+      const nextDetail = detailResponse.data
+      setDetail(nextDetail)
+      setVersions(versionsResponse.data)
+
+      if (!isFederatedDefinition(nextDetail.definition)) {
+        setMetadata(null)
+        setCapabilities({})
+        return
+      }
+
+      const metadataResponse = await getJson<FederatedMetadata>(`/api/admin/service-definitions/${id}/federated-metadata`)
+      setMetadata(metadataResponse.data)
+
+      const distinctConnectionIds = [...new Set(nextDetail.sources.map((item) => item.connectionId).filter(Boolean))] as number[]
+      const capabilityEntries = await Promise.all(
+        distinctConnectionIds.map(async (connectionId) => {
+          const response = await getJson<SourceCapabilityItem[]>(`/api/admin/connections/${connectionId}/capabilities`)
+          return [connectionId, response.data] as const
+        }),
+      )
+      setCapabilities(Object.fromEntries(capabilityEntries))
+    } finally {
+      setWorkspaceLoading(false)
+    }
   }
 
   useEffect(() => {
     void loadDefinitions()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
-    if (!selectedId) {
-      setDetail(null)
-      setVersions([])
-      return
+    if (selectedId) {
+      void loadWorkspace(selectedId)
     }
-    void loadDetail(selectedId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId])
 
-  const columns = useMemo<ColumnsType<ServiceDefinition>>(
-    () => [
-      {
-        title: '服务编码',
-        dataIndex: 'serviceCode',
-      },
-      {
-        title: '名称',
-        dataIndex: 'serviceName',
-      },
-      {
-        title: '类型',
-        dataIndex: 'serviceType',
-      },
-      {
-        title: '状态',
-        dataIndex: 'status',
-        render: (value: string) => renderServiceStatusText(value),
-      },
-      {
-        title: '版本',
-        dataIndex: 'version',
-        render: (value: number | null | undefined) => value ?? 0,
-      },
-      {
-        title: '操作',
-        key: 'actions',
-        render: (_, record) => (
-          <Space size={4}>
-            <ActionIconButton
-              icon={<EditOutlined />}
-              label={`编辑服务 ${record.serviceCode}`}
-              onClick={() => void openEdit(record.id ?? null)}
-            />
-            {record.status === 'DRAFT' ? (
-              <ActionIconButton
-                icon={<RocketOutlined />}
-                label={`发布服务 ${record.serviceCode}`}
-                loading={actionLoading === record.id}
-                onClick={() => void handlePublish(record.id)}
-              />
-            ) : null}
-            {record.status === 'PUBLISHED' ? (
-              <ActionIconButton
-                icon={<StopOutlined />}
-                label={`停用服务 ${record.serviceCode}`}
-                confirmTitle="确认停用该服务？"
-                onClick={() => void handleDisable(record.id)}
-              />
-            ) : null}
-          </Space>
-        ),
-      },
-    ],
-    [actionLoading],
-  )
+  const capabilityRows = useMemo<CapabilityRow[]>(() => {
+    const connectionMap = new Map(connections.map((item) => [item.id, item]))
+    return Object.entries(capabilities).flatMap(([connectionId, items]) => {
+      const connection = connectionMap.get(Number(connectionId))
+      return items.map((item) => ({
+        ...item,
+        connectionCode: connection?.connectionCode ?? String(connectionId),
+        connectionName: connection?.connectionName ?? `连接 ${connectionId}`,
+      }))
+    })
+  }, [capabilities, connections])
+
+  const filteredDefinitions = useMemo(() => {
+    if (!searchKeyword.trim()) {
+      return definitions
+    }
+    const keyword = searchKeyword.toLowerCase()
+    return definitions.filter(
+      (item) =>
+        item.serviceName?.toLowerCase().includes(keyword) ||
+        item.serviceCode?.toLowerCase().includes(keyword),
+    )
+  }, [definitions, searchKeyword])
+
+  const paginatedDefinitions = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredDefinitions.slice(start, start + pageSize)
+  }, [filteredDefinitions, currentPage, pageSize])
+
+  const previewColumns = useMemo(() => buildPreviewColumns(previewResult?.rows ?? []), [previewResult])
+
+  async function openDetail(id: number | null) {
+    if (!id) {
+      return
+    }
+    setSelectedId(id)
+    await loadWorkspace(id)
+  }
 
   async function openEdit(id: number | null) {
     if (!id) {
       setEditingDefinition(null)
       form.setFieldsValue(DEFAULT_DEFINITION)
+      autoDetectForm.setFieldsValue({
+        draftSqlText: '',
+        defaultConnectionId: connections.length === 1 ? connections[0].id : undefined,
+      })
       setDrawerOpen(true)
       return
     }
     const response = await getJson<ServiceDefinitionDetail>(`/api/admin/service-definitions/${id}`)
-    const nextDetail = response.data
-    setEditingDefinition(nextDetail.definition)
+    const editingDetail = response.data
+    setEditingDefinition(editingDetail.definition)
     form.setFieldsValue({
-      serviceCode: nextDetail.definition.serviceCode,
-      serviceName: nextDetail.definition.serviceName,
-      serviceType: nextDetail.definition.serviceType,
-      status: nextDetail.definition.status,
-      sqlTemplate: nextDetail.definition.sqlTemplate ?? '',
-      sqlType: nextDetail.definition.sqlType,
-      executionMode: nextDetail.definition.executionMode,
-      planStatus: nextDetail.definition.planStatus,
-      currentSqlVersion: nextDetail.definition.currentSqlVersion ?? 0,
-      version: nextDetail.definition.version ?? 0,
-      maxBatchSize: nextDetail.definition.maxBatchSize ?? 20,
-      maxResultRows: nextDetail.definition.maxResultRows ?? 200,
-      queryTimeoutSeconds: nextDetail.definition.queryTimeoutSeconds ?? 20,
-      federatedQueryTimeoutSeconds: nextDetail.definition.federatedQueryTimeoutSeconds ?? 40,
-      remark: nextDetail.definition.remark ?? '',
-      sources: nextDetail.sources.map((item) => ({
-        connectionId: item.connectionId,
+      ...DEFAULT_DEFINITION,
+      ...(isFederatedDefinition(editingDetail.definition) ? FEDERATED_DEFAULTS : {}),
+      ...editingDetail.definition,
+      sources: editingDetail.sources,
+      params: editingDetail.params,
+      fields: editingDetail.fields,
+    } as ServiceDefinitionUpsertPayload)
+    autoDetectForm.setFieldsValue({
+      draftSqlText: editingDetail.definition.sqlTemplate ?? '',
+      defaultConnectionId: editingDetail.sources[0]?.connectionId ?? undefined,
+      defaultCatalogId: editingDetail.sources[0]?.catalogId ?? undefined,
+    })
+    void ensureConnectionCatalogs(editingDetail.sources[0]?.connectionId ?? undefined)
+    setDrawerOpen(true)
+  }
+
+  async function handleAutoDetect() {
+    const values = await autoDetectForm.validateFields()
+    setDetectingSql(true)
+    try {
+      const sqlType = form.getFieldValue('sqlType') || 'FEDERATED_SQL'
+      const response = await postJson<SqlAutoDetectResponse, {
+        sqlText: string
+        sqlType: string
+        defaultConnectionId?: number
+        defaultCatalogId?: number
+      }>('/api/admin/service-definitions/sql-auto-detect', {
+        sqlText: values.draftSqlText,
+        sqlType,
+        defaultConnectionId: values.defaultConnectionId,
+        defaultCatalogId: values.defaultCatalogId,
+      })
+      applyAutoDetectResult(response.data, values.draftSqlText)
+      message.success('SQL 已自动识别并回填')
+    } catch (err) {
+      message.error(resolveErrorMessage(err))
+    } finally {
+      setDetectingSql(false)
+    }
+  }
+
+  function handleDefaultConnectionChange(connectionId?: number) {
+    autoDetectForm.setFieldValue('defaultCatalogId', undefined)
+    void ensureConnectionCatalogs(connectionId)
+  }
+
+  function applyAutoDetectResult(result: SqlAutoDetectResponse, sqlText: string) {
+      const nextValues: Partial<ServiceDefinitionUpsertPayload> = {
+      sqlType: result.sqlType,
+      serviceType: result.serviceType,
+      sqlTemplate: sqlText,
+      sources: result.sources.map((item, index) => ({
+        connectionId: item.connectionId ?? undefined,
         catalogId: item.catalogId ?? undefined,
         sourceAlias: item.sourceAlias,
         sourceType: item.sourceType,
         sourceValue: item.sourceValue,
-        joinKey: item.joinKey ?? '',
-        configJson: item.configJson ?? '',
-        status: item.status ?? 'ENABLED',
-        remark: item.remark ?? '',
+        joinKey: result.fields.find((field) => field.sourceAlias === item.sourceAlias && field.joinKey)?.sourceColumn ?? '',
+        configJson: '',
+        status: 'ENABLED',
+        remark:
+          item.connectionResolved && item.catalogResolved
+            ? ''
+            : '该来源仅完成 SQL 识别，请补充连接或目录',
       })),
-      params: nextDetail.params.map((item) => ({
+      params: result.params.map((item) => ({
         paramName: item.paramName,
         displayName: item.displayName,
         paramType: item.paramType,
         sqlPlaceholder: item.sqlPlaceholder,
-        required: item.required ?? true,
-        defaultValue: item.defaultValue ?? '',
+        required: item.required,
+        defaultValue: '',
         sortOrder: item.sortOrder,
-        remark: item.remark ?? '',
+        remark: '',
       })),
-      fields: nextDetail.fields.map((item) => ({
+      fields: result.fields.map((item) => ({
         sourceAlias: item.sourceAlias ?? '',
         sourceColumn: item.sourceColumn,
         fieldName: item.fieldName,
         displayName: item.displayName,
         fieldType: item.fieldType,
         sortOrder: item.sortOrder,
-        primaryKey: item.primaryKey ?? false,
-        joinKey: item.joinKey ?? false,
-        remark: item.remark ?? '',
+        primaryKey: item.primaryKey,
+        joinKey: item.joinKey,
+        remark: '',
       })),
-    })
-    setDrawerOpen(true)
+    }
+    form.setFieldsValue(nextValues as ServiceDefinitionUpsertPayload)
   }
 
   async function handleSubmit(values: ServiceDefinitionUpsertPayload) {
     setSaving(true)
     try {
+      const sqlText = autoDetectForm.getFieldValue('draftSqlText')?.trim() || values.sqlTemplate?.trim() || ''
+      const payload = {
+        ...values,
+        sqlTemplate: sqlText,
+        executionMode: undefined,
+        planStatus: undefined,
+        maxBatchSize: undefined,
+        maxResultRows: undefined,
+        queryTimeoutSeconds: undefined,
+        federatedQueryTimeoutSeconds: undefined,
+        sources: (values.sources ?? []).map((item) => ({
+          ...item,
+          configJson: item.configJson ? parseJsonObject(item.configJson, '来源扩展配置') : undefined,
+        })),
+      }
       if (editingDefinition?.id) {
-        await putJson<ServiceDefinitionDetail, ServiceDefinitionUpsertPayload>(
-          `/api/admin/service-definitions/${editingDefinition.id}`,
-          values,
-        )
-        message.success('服务草稿已更新')
-        await loadDefinitions(editingDefinition.id)
-        await loadDetail(editingDefinition.id)
+        await putJson(`/api/admin/service-definitions/${editingDefinition.id}`, payload)
+        if (isFederatedDefinition(values) && sqlText) {
+          await putJson(`/api/admin/service-definitions/${editingDefinition.id}/federated-sql`, {
+            federatedSqlText: sqlText,
+            sqlComment: '页面自动同步联邦 SQL',
+          })
+        }
+        message.success('服务已更新')
       } else {
-        const response = await postJson<ServiceDefinitionDetail, ServiceDefinitionUpsertPayload>(
-          '/api/admin/service-definitions',
-          values,
-        )
-        message.success('服务草稿已创建')
-        await loadDefinitions(response.data.definition.id ?? null)
+        const createResponse = await postJson<ServiceDefinitionDetail, typeof payload>('/api/admin/service-definitions', payload)
+        if (isFederatedDefinition(values) && sqlText && createResponse.data.definition.id) {
+          await putJson(`/api/admin/service-definitions/${createResponse.data.definition.id}/federated-sql`, {
+            federatedSqlText: sqlText,
+            sqlComment: '页面自动同步联邦 SQL',
+          })
+        }
+        message.success('服务已创建')
       }
       setDrawerOpen(false)
-    } catch (error) {
-      message.error(resolveErrorMessage(error))
+      await loadDefinitions(selectedId)
+    } catch (err) {
+      message.error(resolveErrorMessage(err))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDelete(id?: number) {
+    if (!id) {
+      return
+    }
+    try {
+      await deleteJson(`/api/admin/service-definitions/${id}`)
+      message.success('服务已删除')
+      await loadDefinitions()
+    } catch (err) {
+      message.error(resolveErrorMessage(err))
     }
   }
 
@@ -273,12 +648,11 @@ export function ServiceModulePage() {
     }
     setActionLoading(id)
     try {
-      await postJson<ServiceDefinitionDetail, undefined>(`/api/admin/service-definitions/${id}/publish`)
+      await postJson(`/api/admin/service-definitions/${id}/publish`, {})
       message.success('服务已发布')
-      await loadDefinitions(id)
-      await loadDetail(id)
-    } catch (error) {
-      message.error(resolveErrorMessage(error))
+      await loadDefinitions(selectedId)
+    } catch (err) {
+      message.error(resolveErrorMessage(err))
     } finally {
       setActionLoading(null)
     }
@@ -288,165 +662,491 @@ export function ServiceModulePage() {
     if (!id) {
       return
     }
-    setActionLoading(id)
     try {
-      await putJson<ServiceDefinitionDetail, { status: string }>(
-        `/api/admin/service-definitions/${id}/status`,
-        { status: 'DISABLED' },
-      )
+      await putJson(`/api/admin/service-definitions/${id}/status`, { status: 'DISABLED' })
       message.success('服务已停用')
-      await loadDefinitions(id)
-      await loadDetail(id)
-    } catch (error) {
-      message.error(resolveErrorMessage(error))
+      await loadDefinitions(selectedId)
+    } catch (err) {
+      message.error(resolveErrorMessage(err))
+    }
+  }
+
+  async function handleSaveSqlDraft(values: SqlDraftForm) {
+    if (!selectedId) {
+      return
+    }
+    setSqlSaving(true)
+    try {
+      await putJson(`/api/admin/service-definitions/${selectedId}/federated-sql`, {
+        federatedSqlText: values.federatedSqlText,
+        sqlComment: values.sqlComment,
+      })
+      message.success('SQL 草稿已保存')
+      await loadWorkspace(selectedId)
+    } catch (err) {
+      message.error(resolveErrorMessage(err))
     } finally {
-      setActionLoading(null)
+      setSqlSaving(false)
+    }
+  }
+
+  async function handlePreviewExecute(values: PreviewForm) {
+    if (!selectedId || !metadata?.draftSql?.sqlText) {
+      return
+    }
+    setPreviewExecuting(true)
+    setPreviewResult(null)
+    setPreviewError(null)
+    try {
+      const params = parseJsonObject(values.paramsText || '{}', '参数')
+      const requestBody: FederatedPreviewRequest = {
+        federatedSqlText: metadata.draftSql.sqlText,
+        params,
+      }
+      const response = await postJson<PreviewResult, FederatedPreviewRequest>(
+        `/api/admin/service-definitions/${selectedId}/federated-preview`,
+        requestBody,
+      )
+      setPreviewResult(response.data)
+      message.success('预览执行成功')
+    } catch (err) {
+      const errorMessage = resolveErrorMessage(err)
+      setPreviewError(errorMessage)
+      message.error(errorMessage)
+    } finally {
+      setPreviewExecuting(false)
     }
   }
 
   return (
     <div className="module-page">
+      {/* 页面头部 */}
       <div className="module-hero">
         <div>
-          <Typography.Title level={5}>数据服务</Typography.Title>
+          <Typography.Title level={5} style={{ margin: 0 }}>数据服务</Typography.Title>
+          <Typography.Text type="secondary" style={{ fontSize: 13 }}>管理和配置联邦数据查询服务</Typography.Text>
         </div>
-        <Button type="primary" onClick={() => void openEdit(null)}>
-          新建服务草稿
-        </Button>
+        <Space>
+          <Button icon={<ReloadOutlined />} onClick={() => void loadDefinitions(selectedId)}>
+            刷新工作区
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => void openEdit(null)}>
+            新建服务
+          </Button>
+        </Space>
       </div>
 
-      <div className="module-grid">
-        <Card title="服务列表" className="li-page-main-card">
-          {loading ? (
-            <Spin />
-          ) : (
-            <Table
-              rowKey={(record) => String(record.id)}
-              columns={columns}
-              dataSource={definitions}
-              pagination={false}
-              size="small"
-              onRow={(record) => ({
-                onClick: () => {
-                  if (record.id) {
-                    setSelectedId(record.id)
-                  }
-                },
-              })}
-              rowClassName={(record) => (record.id === selectedId ? 'li-table-row-selected' : '')}
+      <div className="federation-layout-v1">
+        {/* 左侧服务列表 */}
+        <div className="service-list-sidebar-v1">
+          <div className="service-list-title-row-v1">
+            <span className="service-list-title-text-v1">服务列表</span>
+          </div>
+          <div className="service-list-search-v1">
+            <Input
+              placeholder="搜索服务..."
+              prefix={<SearchOutlined />}
+              value={searchKeyword}
+              onChange={(e) => {
+                setSearchKeyword(e.target.value)
+                setCurrentPage(1)
+              }}
+              allowClear
             />
+          </div>
+          <div className="service-list-items-v1">
+            {loading ? (
+              <div style={{ padding: 24, textAlign: 'center' }}>
+                <Spin />
+              </div>
+            ) : filteredDefinitions.length === 0 ? (
+              <Empty description={definitions.length === 0 ? "还没有数据服务" : "未找到匹配的服务"} style={{ marginTop: 40 }} />
+            ) : (
+              paginatedDefinitions.map((item) => (
+                <div
+                  key={item.id}
+                  className={`service-list-item-v1 ${item.id === selectedId ? 'active' : ''}`}
+                  onClick={() => item.id && setSelectedId(item.id)}
+                >
+                  <div className="service-list-item-header-v1">
+                    <Tag color={isFederatedDefinition(item) ? 'blue' : 'green'}>
+                      {isFederatedDefinition(item) ? '联邦服务' : '本地服务'}
+                    </Tag>
+                    <span className={`service-status-text ${item.status?.toLowerCase()}`}>
+                      {item.status === 'PUBLISHED' ? '已发布' : '草稿'}
+                    </span>
+                  </div>
+                  <div className="service-list-item-title-v1">{item.serviceName}</div>
+                  <div className="service-list-item-code-v1">{item.serviceCode}</div>
+                  <div className="service-list-item-actions-v1" onClick={(e) => e.stopPropagation()}>
+                    <ActionIconButton
+                      icon={<EditOutlined />}
+                      label={`编辑 ${item.serviceCode}`}
+                      onClick={() => void openEdit(item.id ?? null)}
+                    />
+                    {item.status === 'DRAFT' ? (
+                      <ActionIconButton
+                        icon={<RocketOutlined />}
+                        label={`发布 ${item.serviceCode}`}
+                        loading={actionLoading === item.id}
+                        onClick={() => void handlePublish(item.id)}
+                      />
+                    ) : null}
+                    {item.status === 'PUBLISHED' ? (
+                      <ActionIconButton
+                        icon={<StopOutlined />}
+                        label={`停用 ${item.serviceCode}`}
+                        confirmTitle="确认停用该服务？"
+                        onClick={() => void handleDisable(item.id)}
+                      />
+                    ) : null}
+                    {item.status !== 'PUBLISHED' ? (
+                      <ActionIconButton
+                        icon={<DeleteOutlined />}
+                        label={`删除 ${item.serviceCode}`}
+                        danger
+                        confirmTitle="确认删除该服务？"
+                        onClick={() => void handleDelete(item.id)}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          {!loading && filteredDefinitions.length > 0 && (
+            <div className="service-list-pagination-v1">
+              <Pagination
+                current={currentPage}
+                pageSize={pageSize}
+                total={filteredDefinitions.length}
+                onChange={(page, size) => {
+                  setCurrentPage(page)
+                  if (size && size !== pageSize) {
+                    setPageSize(size)
+                  }
+                }}
+                showSizeChanger
+                pageSizeOptions={[5, 10, 20, 50]}
+                size="small"
+              />
+            </div>
           )}
-        </Card>
+        </div>
 
-        <Card title="服务详情与版本" className="li-page-main-card">
-          {!detail ? (
-            <Alert type="info" showIcon message="请选择一个服务查看详情" />
+        {/* 右侧详情区 */}
+        <div className="service-detail-container-v1">
+          {workspaceLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+              <Spin size="large" />
+            </div>
+          ) : !detail ? (
+            <Empty description="请选择一个数据服务查看详情" style={{ marginTop: 100 }} />
           ) : (
-            <Space direction="vertical" size={16} style={{ width: '100%' }}>
-              <Descriptions size="small" column={2} bordered>
-                <Descriptions.Item label="服务编码">{detail.definition.serviceCode}</Descriptions.Item>
-                <Descriptions.Item label="状态">{renderServiceStatusText(detail.definition.status)}</Descriptions.Item>
-                <Descriptions.Item label="服务类型">{detail.definition.serviceType}</Descriptions.Item>
-                <Descriptions.Item label="执行模式">{detail.definition.executionMode}</Descriptions.Item>
-                <Descriptions.Item label="SQL 类型">{detail.definition.sqlType}</Descriptions.Item>
-                <Descriptions.Item label="计划状态">{detail.definition.planStatus}</Descriptions.Item>
-                <Descriptions.Item label="批量上限">{detail.definition.maxBatchSize ?? '-'}</Descriptions.Item>
-                <Descriptions.Item label="结果上限">{detail.definition.maxResultRows ?? '-'}</Descriptions.Item>
-                <Descriptions.Item label="查询超时">{detail.definition.queryTimeoutSeconds ?? '-'} 秒</Descriptions.Item>
-                <Descriptions.Item label="联邦超时">
-                  {detail.definition.federatedQueryTimeoutSeconds ?? '-'} 秒
-                </Descriptions.Item>
-                <Descriptions.Item label="SQL" span={2}>
-                  <Typography.Text code>{detail.definition.sqlTemplate || '未配置'}</Typography.Text>
-                </Descriptions.Item>
-              </Descriptions>
+            <div className="detail-content-v1">
+              {/* 服务概览卡片 */}
+              <Card
+                className="overview-card-v1"
+                title={<span className="card-title-v1">服务概览</span>}
+                extra={<Tag color={isFederatedDefinition(detail.definition) ? 'blue' : 'green'}>{renderSqlTypeText(detail.definition.sqlType)}</Tag>}
+                bordered={false}
+              >
+                <div className="overview-grid-v1">
+                  <div className="overview-col-v1">
+                    <div className="overview-item-v1">
+                      <label>服务编码</label>
+                      <span className="mono">{detail.definition.serviceCode}</span>
+                    </div>
+                    <div className="overview-item-v1">
+                      <label>服务名称</label>
+                      <span>{detail.definition.serviceName}</span>
+                    </div>
+                    <div className="overview-item-v1">
+                      <label>SQL 类型</label>
+                      <span>{renderSqlTypeText(detail.definition.sqlType)}</span>
+                    </div>
+                  </div>
+                  <div className="overview-col-v1">
+                    <div className="overview-item-v1">
+                      <label>状态</label>
+                      <span className="flex items-center gap-2">
+                        <span className={`status-dot ${detail.definition.status?.toLowerCase()}`} />
+                        {detail.definition.status === 'PUBLISHED' ? '已发布' : '草稿'}
+                      </span>
+                    </div>
+                    <div className="overview-item-v1">
+                      <label>服务类型</label>
+                      <span>{isFederatedDefinition(detail.definition) ? '联邦服务' : '普通服务'}</span>
+                    </div>
+                    <div className="overview-item-v1">
+                      <label>执行模式</label>
+                      <span>{renderExecutionModeLabel(detail.definition.executionMode ?? '')}</span>
+                    </div>
+                  </div>
+                  <div className="overview-col-v1">
+                    <div className="overview-item-v1">
+                      <label>计划状态</label>
+                      <span className="flex items-center gap-2">
+                        {detail.definition.planStatus === 'PLANNED' ? (
+                          <>
+                            <CheckOutlined style={{ color: '#52c41a' }} />
+                            <span>{renderPlanStatusLabel(detail.definition.planStatus ?? '')}</span>
+                          </>
+                        ) : (
+                          <span>{renderPlanStatusLabel(detail.definition.planStatus ?? '')}</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="overview-item-v1">
+                      <label>当前版本</label>
+                      <span>{detail.definition.version ?? 0}</span>
+                    </div>
+                    <div className="overview-item-v1">
+                      <label>资源限制</label>
+                      <span>系统统一配置</span>
+                    </div>
+                  </div>
+                </div>
+              </Card>
 
-              <div className="detail-split-grid">
-                <Card size="small" title={`来源 (${detail.sources.length})`}>
-                  <Table<SourceItem>
-                    rowKey={(record) => `${record.sourceAlias}-${record.sourceValue}`}
-                    size="small"
-                    pagination={false}
-                    dataSource={detail.sources}
-                    columns={[
-                      { title: '别名', dataIndex: 'sourceAlias' },
-                      { title: '连接', dataIndex: 'connectionId' },
-                      { title: '类型', dataIndex: 'sourceType' },
-                      { title: '对象', dataIndex: 'sourceValue' },
-                    ]}
-                  />
+              {/* 来源与参数 - 两列布局 */}
+              <div className="two-column-grid-v1">
+                <Card
+                  className="content-card-v1"
+                  title={
+                    <span className="card-title-v1">
+                      <DatabaseOutlined /> 来源 ({detail.sources.length})
+                    </span>
+                  }
+                  bordered={false}
+                >
+                  <table className="data-table-v1">
+                    <thead>
+                      <tr>
+                        <th>别名</th>
+                        <th>连接</th>
+                        <th>类型</th>
+                        <th>对象</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.sources.map((source) => (
+                        <tr key={source.sourceAlias}>
+                          <td><code>{source.sourceAlias}</code></td>
+                          <td>{source.connectionId}</td>
+                          <td><Tag color="blue">{source.sourceType}</Tag></td>
+                          <td><code>{source.sourceValue}</code></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </Card>
-                <Card size="small" title={`参数 (${detail.params.length})`}>
-                  <Table<ParamItem>
-                    rowKey={(record) => record.paramName}
-                    size="small"
-                    pagination={false}
-                    dataSource={detail.params}
-                    columns={[
-                      { title: '参数名', dataIndex: 'paramName' },
-                      { title: '类型', dataIndex: 'paramType' },
-                      { title: '占位符', dataIndex: 'sqlPlaceholder' },
-                      {
-                        title: '必填',
-                        dataIndex: 'required',
-                        render: (value: boolean | undefined) => (value === false ? '否' : '是'),
-                      },
-                    ]}
-                  />
+
+                <Card
+                  className="content-card-v1"
+                  title={
+                    <span className="card-title-v1">
+                      <SettingOutlined /> 参数 ({detail.params.length})
+                    </span>
+                  }
+                  bordered={false}
+                >
+                  <table className="data-table-v1">
+                    <thead>
+                      <tr>
+                        <th>参数名</th>
+                        <th>展示名</th>
+                        <th>类型</th>
+                        <th>必填</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.params.map((param) => (
+                        <tr key={param.paramName}>
+                          <td><code>{param.paramName}</code></td>
+                          <td>{param.displayName}</td>
+                          <td>
+                            <Tag color={param.paramType === 'STRING' ? 'green' : param.paramType === 'LONG' ? 'orange' : 'blue'}>
+                              {param.paramType}
+                            </Tag>
+                          </td>
+                          <td>
+                            {param.required !== false ? (
+                              <span style={{ color: '#52c41a' }}>是</span>
+                            ) : (
+                              <span style={{ color: '#999' }}>否</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </Card>
               </div>
 
-              <Card size="small" title={`字段映射 (${detail.fields.length})`}>
-                <Table<FieldItem>
-                  rowKey={(record) => `${record.fieldName}-${record.sourceColumn}`}
-                  size="small"
-                  pagination={false}
-                  dataSource={detail.fields}
-                  columns={[
-                    { title: '字段名', dataIndex: 'fieldName' },
-                    { title: '展示名', dataIndex: 'displayName' },
-                    { title: '来源列', dataIndex: 'sourceColumn' },
-                    { title: '类型', dataIndex: 'fieldType' },
-                    {
-                      title: '主键',
-                      dataIndex: 'primaryKey',
-                      render: (value: boolean | undefined) => (value ? '是' : '否'),
-                    },
-                    {
-                      title: '关联键',
-                      dataIndex: 'joinKey',
-                      render: (value: boolean | undefined) => (value ? '是' : '否'),
-                    },
-                  ]}
-                />
+              {/* 字段映射 */}
+              <Card
+                className="content-card-v1"
+                title={<span className="card-title-v1"><TableOutlined /> 字段映射 ({detail.fields.length})</span>}
+                bordered={false}
+              >
+                <table className="data-table-v1">
+                  <thead>
+                    <tr>
+                      <th>字段名</th>
+                      <th>展示名</th>
+                      <th>来源别名</th>
+                      <th>来源列</th>
+                      <th>类型</th>
+                      <th>主键</th>
+                      <th>关联键</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.fields.map((field) => (
+                      <tr key={`${field.fieldName}-${field.sourceColumn}`}>
+                        <td><code>{field.fieldName}</code></td>
+                        <td>{field.displayName}</td>
+                        <td><code>{field.sourceAlias || '-'}</code></td>
+                        <td><code>{field.sourceColumn}</code></td>
+                        <td>
+                          <Tag color={field.fieldType === 'STRING' ? 'green' : field.fieldType === 'LONG' ? 'orange' : 'blue'}>
+                            {field.fieldType}
+                          </Tag>
+                        </td>
+                        <td>
+                          {field.primaryKey ? (
+                            <span style={{ color: '#52c41a' }}>是</span>
+                          ) : (
+                            <span style={{ color: '#999' }}>否</span>
+                          )}
+                        </td>
+                        <td>
+                          {field.joinKey ? (
+                            <span style={{ color: '#52c41a' }}>是</span>
+                          ) : (
+                            <span style={{ color: '#999' }}>否</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </Card>
 
-              <Card size="small" title={`版本记录 (${versions.length})`}>
-                <Table<ServiceVersionItem>
-                  rowKey={(record) => record.id}
-                  size="small"
-                  pagination={false}
-                  dataSource={versions}
-                  columns={[
-                    { title: '版本', dataIndex: 'version' },
+              {/* 联邦SQL编辑器 - 仅联邦服务显示 */}
+              {isFederatedDefinition(detail.definition) && (
+                <Card
+                  className="content-card-v1"
+                  title={
+                    <span className="card-title-v1">
+                      <CodeOutlined /> 联邦 SQL
+                    </span>
+                  }
+                  extra={
+                    <Space>
+                      <Button
+                        icon={<PlayCircleOutlined />}
+                        loading={previewExecuting}
+                        onClick={() => void previewForm.submit()}
+                      >
+                        预览执行
+                      </Button>
+                      <Button
+                        type="primary"
+                        icon={<SaveOutlined />}
+                        loading={sqlSaving}
+                        onClick={() => void sqlForm.submit()}
+                      >
+                        保存并校验
+                      </Button>
+                    </Space>
+                  }
+                  bordered={false}
+                >
+                  <Form<SqlDraftForm> form={sqlForm} layout="vertical" onFinish={(values) => void handleSaveSqlDraft(values)}>
+                    <Alert
+                      type="info"
+                      showIcon
+                      message="保存后将调用后端联邦 Parser、Validator、Planner、Optimizer，并刷新诊断结果。"
+                      style={{ marginBottom: 16 }}
+                    />
+                    <Form.Item
+                      name="federatedSqlText"
+                      rules={[{ required: true, message: '请输入联邦 SQL' }]}
+                    >
+                      <Input.TextArea
+                        rows={8}
+                        placeholder="SELECT ... FROM mysql_orders JOIN pg_customers ..."
+                        className="sql-editor-v1"
+                      />
+                    </Form.Item>
+                    <Form.Item name="sqlComment" label="草稿说明">
+                      <Input.TextArea rows={2} placeholder="说明本次联邦 SQL 草稿的变更目的与注意事项" />
+                    </Form.Item>
+                  </Form>
+
+                  {/* 预览执行表单 */}
+                  <Form<PreviewForm> form={previewForm} layout="vertical" onFinish={(values) => void handlePreviewExecute(values)}>
+                    <Form.Item
+                      name="paramsText"
+                      label="预览参数 (JSON)"
+                      initialValue="{}"
+                    >
+                      <Input.TextArea rows={3} placeholder='{"customerId": 123}' />
+                    </Form.Item>
+                  </Form>
+
+                  {previewError && (
+                    <Alert type="error" showIcon message="预览执行失败" description={previewError} style={{ marginTop: 16 }} />
+                  )}
+
+                  {previewResult && (
+                    <div style={{ marginTop: 16 }}>
+                      <Typography.Title level={5}>预览结果</Typography.Title>
+                      <Table
+                        size="small"
+                        scroll={{ x: 'max-content' }}
+                        dataSource={previewResult.rows}
+                        columns={previewColumns}
+                        pagination={false}
+                      />
+                    </div>
+                  )}
+                </Card>
+              )}
+
+              {/* 折叠面板 */}
+              {isFederatedDefinition(detail.definition) && (
+                <Collapse
+                  className="collapse-v1"
+                  items={[
                     {
-                      title: '状态',
-                      dataIndex: 'status',
-                      render: (value: string) => renderServiceStatusText(value),
+                      key: 'validate',
+                      label: `校验日志 (${metadata?.validateLogs.length ?? 0})`,
+                      children: <ValidateLogPanel logs={metadata?.validateLogs ?? []} />,
                     },
-                    { title: '创建人', dataIndex: 'createdBy' },
-                    { title: '创建时间', dataIndex: 'createdAt' },
+                    {
+                      key: 'plans',
+                      label: `计划与诊断 (${metadata?.plans.length ?? 0})`,
+                      children: <PlanPanel plans={metadata?.plans ?? []} />,
+                    },
+                    {
+                      key: 'capability',
+                      label: `来源能力 (${capabilityRows.length})`,
+                      children: <CapabilityPanel rows={capabilityRows} />,
+                    },
                   ]}
                 />
-              </Card>
-            </Space>
+              )}
+            </div>
           )}
-        </Card>
+        </div>
       </div>
 
       <Drawer
-        title={editingDefinition ? `编辑服务 · ${editingDefinition.serviceCode}` : '新建服务草稿'}
-        width={800}
+        title={editingDefinition ? `编辑服务 · ${editingDefinition.serviceCode}` : '新建服务'}
+        width={980}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         destroyOnHidden
@@ -462,53 +1162,180 @@ export function ServiceModulePage() {
         <Form<ServiceDefinitionUpsertPayload>
           form={form}
           layout="vertical"
-          className="compact-form"
+          className="compact-form service-create-form"
           onFinish={(values) => void handleSubmit(values)}
         >
-          <div className="form-grid form-grid-two">
-            <Form.Item label="服务编码" name="serviceCode" rules={[{ required: true }]}>
-              <Input size="small" />
-            </Form.Item>
-            <Form.Item label="服务名称" name="serviceName" rules={[{ required: true }]}>
-              <Input size="small" />
-            </Form.Item>
-            <Form.Item label="服务类型" name="serviceType" rules={[{ required: true }]}>
-              <Select size="small" options={[{ label: '简单查询', value: 'SIMPLE_QUERY' }]} />
-            </Form.Item>
-            <Form.Item label="SQL 类型" name="sqlType" rules={[{ required: true }]}>
-              <Select size="small" options={[{ label: '简单 SQL', value: 'SIMPLE_SQL' }]} />
-            </Form.Item>
-            <Form.Item label="执行模式" name="executionMode" rules={[{ required: true }]}>
-              <Select size="small" options={[{ label: '远端执行', value: 'REMOTE_ONLY' }]} />
-            </Form.Item>
-            <Form.Item label="计划状态" name="planStatus" rules={[{ required: true }]}>
-              <Select
-                size="small"
-                options={[
-                  { label: '未规划', value: 'UNPLANNED' },
-                  { label: '已发布', value: 'PUBLISHED' },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item label="批量上限" name="maxBatchSize">
-              <InputNumber size="small" style={{ width: '100%' }} min={1} />
-            </Form.Item>
-            <Form.Item label="结果上限" name="maxResultRows">
-              <InputNumber size="small" style={{ width: '100%' }} min={1} />
-            </Form.Item>
-            <Form.Item label="查询超时（秒）" name="queryTimeoutSeconds">
-              <InputNumber size="small" style={{ width: '100%' }} min={1} />
-            </Form.Item>
-            <Form.Item label="联邦超时（秒）" name="federatedQueryTimeoutSeconds">
-              <InputNumber size="small" style={{ width: '100%' }} min={1} />
-            </Form.Item>
-          </div>
+          <Form.Item noStyle shouldUpdate={(prev, next) => prev.sqlType !== next.sqlType}>
+            {({ getFieldValue }) => {
+              const federated = getFieldValue('sqlType') === 'FEDERATED_SQL'
+              const draftValues = form.getFieldsValue(true) as ServiceDefinitionUpsertPayload
+              const executionModeText =
+                inferExecutionMode(draftValues) === 'REMOTE_PLUS_LOCAL' ? '远端优先 + 本地补算' : '远端执行'
+              const planStatusText = federated ? '创建时保持未规划，保存联邦 SQL 后自动进入已规划，发布后自动进入已发布' : '普通 SQL 保存后保持未规划'
+              return (
+                <>
+                  <div className="service-create-top-grid">
+                    <Form.Item label="服务编码" name="serviceCode" rules={[{ required: true }]}>
+                      <Input size="small" />
+                    </Form.Item>
+                    <Form.Item label="服务名称" name="serviceName" rules={[{ required: true }]}>
+                      <Input size="small" />
+                    </Form.Item>
+                    <Form.Item label="SQL 类型" name="sqlType" rules={[{ required: true }]}>
+                      <Select
+                        size="small"
+                        options={[
+                          { label: '简单 SQL', value: 'SIMPLE_SQL' },
+                          { label: '联邦 SQL', value: 'FEDERATED_SQL' },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form.Item label="服务类型" name="serviceType">
+                      <Select
+                        size="small"
+                        disabled
+                        options={[
+                          {
+                            label: federated ? '联邦查询' : '简单查询',
+                            value: federated ? 'FEDERATED_QUERY' : 'SIMPLE_QUERY',
+                          },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form<AutoDetectForm> form={autoDetectForm} layout="vertical" component={false}>
+                      <Form.Item name="defaultConnectionId" label="默认连接">
+                        <Select
+                          size="small"
+                          allowClear
+                          showSearch
+                          optionFilterProp="label"
+                          onChange={handleDefaultConnectionChange}
+                          options={connections.map((c) => ({
+                            label: `${c.connectionName} (${c.connectionCode})`,
+                            value: c.id,
+                          }))}
+                        />
+                      </Form.Item>
+                      <Form.Item noStyle shouldUpdate={(prev, next) => prev.defaultConnectionId !== next.defaultConnectionId}>
+                        {() => {
+                          const defaultConnectionId = autoDetectForm.getFieldValue('defaultConnectionId')
+                          const catalogs = defaultConnectionId ? connectionCatalogs[defaultConnectionId] ?? [] : []
+                          return (
+                            <Form.Item name="defaultCatalogId" label="默认 Schema">
+                              <Select
+                                size="small"
+                                allowClear
+                                disabled={!defaultConnectionId}
+                                placeholder={catalogs.length > 0 ? '可选默认 Schema' : '未加载 Schema，可留空'}
+                                onDropdownVisibleChange={(open) => {
+                                  if (open) {
+                                    void ensureConnectionCatalogs(defaultConnectionId)
+                                  }
+                                }}
+                                options={catalogs.map((catalog) => ({
+                                  label: `${catalog.catalogName} (${catalog.catalogValue})`,
+                                  value: catalog.id,
+                                }))}
+                              />
+                            </Form.Item>
+                          )
+                        }}
+                      </Form.Item>
+                    </Form>
+                  </div>
 
-          <Form.Item label="SQL 模板" name="sqlTemplate">
-            <Input.TextArea rows={4} />
-          </Form.Item>
-          <Form.Item label="备注" name="remark">
-            <Input size="small" />
+                  <Card size="small" className="service-create-sql-card" style={{ marginBottom: 16 }}>
+                    <div className="service-create-sql-layout">
+                      <div>
+                        <div className="service-create-sql-header">
+                          <div>
+                            <Typography.Text strong>SQL 即服务</Typography.Text>
+                            <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0' }}>
+                              粘贴 SQL 后点击解析，系统自动识别数据来源、参数与字段映射。
+                            </Typography.Paragraph>
+                          </div>
+                          <Button
+                            type="primary"
+                            icon={<ReloadOutlined />}
+                            loading={detectingSql}
+                            onClick={() => void handleAutoDetect()}
+                          >
+                            SQL 解析
+                          </Button>
+                        </div>
+                        <Form<AutoDetectForm> form={autoDetectForm} layout="vertical" component={false}>
+                          <Form.Item
+                            name="draftSqlText"
+                            label="SQL"
+                            rules={[{ required: true, message: '请输入 SQL' }]}
+                            style={{ marginBottom: 0 }}
+                          >
+                            <Input.TextArea
+                              rows={8}
+                              className="service-create-sql-input"
+                              placeholder="SELECT c.customer_id, o.order_amount FROM customer_base c JOIN customer_order o ON c.customer_id = o.customer_id WHERE c.customer_id = :customerId"
+                            />
+                          </Form.Item>
+                        </Form>
+                      </div>
+                      <div className="service-create-summary-panel">
+                        <div className="service-create-summary-title">系统判定</div>
+                        <div className="service-create-summary-list">
+                          <div className="service-create-summary-item">
+                            <span>执行模式</span>
+                            <strong>{executionModeText}</strong>
+                          </div>
+                          <div className="service-create-summary-item">
+                            <span>计划状态</span>
+                            <strong>{federated ? '按流程自动变更' : renderPlanStatusLabel(inferPlanStatus(draftValues))}</strong>
+                          </div>
+                          <div className="service-create-summary-item">
+                            <span>资源限制</span>
+                            <strong>系统统一配置</strong>
+                          </div>
+                        </div>
+                        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                          {planStatusText}
+                        </Typography.Paragraph>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="解析后请确认识别结果"
+                    description="来源、参数、字段映射会自动回填到下方区域；批量上限、结果上限、查询超时、联邦超时由系统管理统一配置。"
+                    style={{ marginBottom: 16 }}
+                  />
+
+                  <Form.Item label="SQL 模板" name="sqlTemplate" hidden>
+                    <Input.TextArea rows={4} />
+                  </Form.Item>
+
+                  <Form.Item label="备注" name="remark">
+                    <Input size="small" />
+                  </Form.Item>
+
+                  <Card size="small" title="解析结果确认" className="service-create-result-card" style={{ marginBottom: 16 }}>
+                    <div className="service-create-result-stats">
+                      <div className="service-create-result-stat">
+                        <span>数据来源</span>
+                        <strong>{draftValues.sources?.length ?? 0}</strong>
+                      </div>
+                      <div className="service-create-result-stat">
+                        <span>参数</span>
+                        <strong>{draftValues.params?.length ?? 0}</strong>
+                      </div>
+                      <div className="service-create-result-stat">
+                        <span>字段映射</span>
+                        <strong>{draftValues.fields?.length ?? 0}</strong>
+                      </div>
+                    </div>
+                  </Card>
+                </>
+              )
+            }}
           </Form.Item>
 
           <Form.List name="sources">
@@ -549,8 +1376,14 @@ export function ServiceModulePage() {
                       <Form.Item label="连接" name={[field.name, 'connectionId']} rules={[{ required: true }]}>
                         <Select
                           size="small"
-                          options={connections.map((c) => ({ label: c.connectionName, value: c.id }))}
+                          options={connections.map((c) => ({
+                            label: `${c.connectionName} (${c.connectionCode})`,
+                            value: c.id,
+                          }))}
                         />
+                      </Form.Item>
+                      <Form.Item label="catalogId" name={[field.name, 'catalogId']}>
+                        <InputNumber size="small" style={{ width: '100%' }} min={1} />
                       </Form.Item>
                       <Form.Item label="别名" name={[field.name, 'sourceAlias']} rules={[{ required: true }]}>
                         <Input size="small" />
@@ -568,16 +1401,10 @@ export function ServiceModulePage() {
                         <Input size="small" />
                       </Form.Item>
                       <Form.Item label="关联键" name={[field.name, 'joinKey']}>
-                        <Input size="small" />
+                        <Input size="small" placeholder="例如 customer_id" />
                       </Form.Item>
-                      <Form.Item label="状态" name={[field.name, 'status']}>
-                        <Select
-                          size="small"
-                          options={[
-                            { label: '已启用', value: 'ENABLED' },
-                            { label: '已停用', value: 'DISABLED' },
-                          ]}
-                        />
+                      <Form.Item label="扩展配置 JSON" name={[field.name, 'configJson']}>
+                        <Input size="small" />
                       </Form.Item>
                     </div>
                   </Card>
@@ -631,12 +1458,10 @@ export function ServiceModulePage() {
                           size="small"
                           options={[
                             { label: '字符串', value: 'STRING' },
-                            { label: '整数', value: 'INTEGER' },
-                            { label: '长整数', value: 'LONG' },
-                            { label: '小数', value: 'DECIMAL' },
+                            { label: '数字', value: 'NUMBER' },
                             { label: '布尔', value: 'BOOLEAN' },
-                            { label: '日期', value: 'DATE' },
-                            { label: '时间戳', value: 'DATETIME' },
+                            { label: '长整型', value: 'LONG' },
+                            { label: '列表', value: 'LIST' },
                           ]}
                         />
                       </Form.Item>
@@ -646,8 +1471,8 @@ export function ServiceModulePage() {
                       <Form.Item label="默认值" name={[field.name, 'defaultValue']}>
                         <Input size="small" />
                       </Form.Item>
-                      <Form.Item label="排序" name={[field.name, 'sortOrder']}>
-                        <InputNumber size="small" style={{ width: '100%' }} />
+                      <Form.Item label="排序" name={[field.name, 'sortOrder']} rules={[{ required: true }]}>
+                        <InputNumber size="small" style={{ width: '100%' }} min={1} />
                       </Form.Item>
                     </div>
                   </Card>
@@ -708,17 +1533,15 @@ export function ServiceModulePage() {
                           size="small"
                           options={[
                             { label: '字符串', value: 'STRING' },
-                            { label: '整数', value: 'INTEGER' },
-                            { label: '长整数', value: 'LONG' },
-                            { label: '小数', value: 'DECIMAL' },
+                            { label: '数字', value: 'NUMBER' },
                             { label: '布尔', value: 'BOOLEAN' },
-                            { label: '日期', value: 'DATE' },
-                            { label: '时间戳', value: 'DATETIME' },
+                            { label: '长整型', value: 'LONG' },
+                            { label: '小数', value: 'DECIMAL' },
                           ]}
                         />
                       </Form.Item>
-                      <Form.Item label="排序" name={[field.name, 'sortOrder']}>
-                        <InputNumber size="small" style={{ width: '100%' }} />
+                      <Form.Item label="排序" name={[field.name, 'sortOrder']} rules={[{ required: true }]}>
+                        <InputNumber size="small" style={{ width: '100%' }} min={1} />
                       </Form.Item>
                     </div>
                   </Card>
@@ -729,29 +1552,5 @@ export function ServiceModulePage() {
         </Form>
       </Drawer>
     </div>
-  )
-}
-
-type EditableSectionProps = {
-  title: string
-  actionLabel: string
-  emptyText: string
-  onAdd: () => void
-  children: ReactNode
-}
-
-function EditableSection({ title, actionLabel, emptyText, onAdd, children }: EditableSectionProps) {
-  const childArray = Array.isArray(children) ? children : [children]
-  const hasItems = childArray.some(Boolean)
-
-  return (
-    <Space direction="vertical" size={12} style={{ width: '100%', marginBottom: 16 }}>
-      <div className="section-header">
-        <Typography.Title level={5}>{title}</Typography.Title>
-        <Button size="small" onClick={onAdd}>{actionLabel}</Button>
-      </div>
-      {!hasItems ? <Alert type="info" showIcon message={emptyText} /> : null}
-      {children}
-    </Space>
   )
 }

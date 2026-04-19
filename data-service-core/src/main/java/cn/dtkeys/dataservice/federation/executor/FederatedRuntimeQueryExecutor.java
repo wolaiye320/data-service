@@ -324,7 +324,6 @@ public class FederatedRuntimeQueryExecutor {
         field.setSourceColumn(joinKeyColumn);
         field.setFieldName(joinKeyColumn);
         field.setDisplayName(joinKeyColumn);
-        field.setFieldType("STRING");
         field.setJoinKey(true);
         return field;
     }

@@ -42,6 +42,9 @@ class FederatedPipelineTest {
         FederatedDiagnostics diagnostics = diagnosticsService.buildDiagnostics(optimizedPlan);
 
         assertThat(query.sourceTables()).containsExactly("mysql_orders", "pg_customers");
+        assertThat(query.sourceReferences())
+            .extracting(item -> item.sourceName() + ":" + item.sqlAlias())
+            .containsExactly("mysql_orders:o", "pg_customers:c");
         assertThat(query.joinQuery()).isTrue();
         assertThat(validationResult.valid()).isTrue();
         assertThat(validationResult.warnings()).isNotEmpty();
@@ -85,8 +88,27 @@ class FederatedPipelineTest {
         assertThat(query.selectedFields())
             .containsExactly("pg_customer.customer_id", "pg_customer.customer_name", "mysql_order.order_amount");
         assertThat(query.sourceTables()).containsExactly("pg_customer", "mysql_order");
+        assertThat(query.sourceReferences())
+            .extracting(item -> item.sourceName() + ":" + item.sqlAlias())
+            .containsExactly("pg_customer:pg_customer", "mysql_order:mysql_order");
         assertThat(query.whereClause()).isEqualTo("pg_customer.customer_id = :customerId");
         assertThat(query.joinQuery()).isTrue();
+    }
+
+    @Test
+    void shouldParseFunctionProjectionWithoutBreakingFieldSplit() {
+        FederatedParsedQuery query = parser.parse("""
+            select c.customer_id, coalesce(c.customer_name, 'unknown') as customerName, sum(o.order_amount) as totalAmount
+            from customer_base c join customer_order o on c.customer_id = o.customer_id
+            where c.customer_id = :customerId
+            """);
+
+        assertThat(query.selectedFields())
+            .containsExactly(
+                "c.customer_id",
+                "coalesce(c.customer_name, 'unknown') as customerName",
+                "sum(o.order_amount) as totalAmount"
+            );
     }
 
     @Test

@@ -5,7 +5,7 @@ export function HomePage() {
     <div>
       <Typography.Title level={2}>工程与运行底座已就绪</Typography.Title>
       <Typography.Paragraph>
-        当前版本完成了后端多模块骨架、统一响应与异常处理、基础日志审计接入、资源保护基线，以及第一阶段管理端与第二阶段联邦平台入口。
+        当前版本完成了后端多模块骨架、统一响应与异常处理、基础日志审计接入、资源保护基线，以及统一数据服务管理端与联邦能力工作区。
       </Typography.Paragraph>
       <Row gutter={[16, 16]}>
         <Col span={8}>
@@ -33,7 +33,7 @@ export function HomePage() {
             { children: '统一响应、错误码、全局异常处理' },
             { children: 'traceId 日志过滤器与审计入口' },
             { children: '查询超时、批量上限、结果上限默认保护' },
-            { children: '联邦 SQL 编辑、校验日志、计划诊断、自助发布入口' },
+            { children: '统一数据服务页内的联邦 SQL 编辑、校验日志、计划诊断、自助发布入口' },
           ]}
         />
       </Card>

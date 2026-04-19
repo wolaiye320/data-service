@@ -267,9 +267,19 @@ export async function createFederatedDraft(
     primaryCatalogId: number
     childConnectionId: number
     childCatalogId: number
+    primarySourceValue?: string
+    childSourceValue?: string
+    sourceJoinKey?: string
+    fieldJoinKeys?: {
+      customerId?: boolean
+      customerName?: boolean
+      orderAmount?: boolean
+    }
   },
 ) {
   const serviceCode = options.serviceCode ?? uniqueCode('pw_fed_service')
+  const sourceJoinKey = options.sourceJoinKey ?? ''
+  const fieldJoinKeys = options.fieldJoinKeys ?? {}
   const response = await post<ServiceDefinitionDetail>(request, '/api/admin/service-definitions', {
     serviceCode,
     serviceName: options.serviceName ?? `Playwright 联邦服务 ${serviceCode}`,
@@ -292,8 +302,8 @@ export async function createFederatedDraft(
         catalogId: options.primaryCatalogId,
         sourceAlias: 'pg_customer',
         sourceType: 'TABLE',
-        sourceValue: 'customer_base',
-        joinKey: '',
+        sourceValue: options.primarySourceValue ?? 'customer_base',
+        joinKey: sourceJoinKey,
         configJson: '',
         status: 'ENABLED',
         remark: '',
@@ -303,8 +313,8 @@ export async function createFederatedDraft(
         catalogId: options.childCatalogId,
         sourceAlias: 'pg_order',
         sourceType: 'TABLE',
-        sourceValue: 'customer_order_ext',
-        joinKey: '',
+        sourceValue: options.childSourceValue ?? 'customer_order_ext',
+        joinKey: sourceJoinKey,
         configJson: '',
         status: 'ENABLED',
         remark: '',
@@ -331,7 +341,7 @@ export async function createFederatedDraft(
         fieldType: 'LONG',
         sortOrder: 1,
         primaryKey: true,
-        joinKey: true,
+        joinKey: fieldJoinKeys.customerId ?? true,
         remark: '',
       },
       {
@@ -342,7 +352,7 @@ export async function createFederatedDraft(
         fieldType: 'STRING',
         sortOrder: 2,
         primaryKey: false,
-        joinKey: false,
+        joinKey: fieldJoinKeys.customerName ?? false,
         remark: '',
       },
       {
@@ -353,7 +363,7 @@ export async function createFederatedDraft(
         fieldType: 'DECIMAL',
         sortOrder: 3,
         primaryKey: false,
-        joinKey: false,
+        joinKey: fieldJoinKeys.orderAmount ?? false,
         remark: '',
       },
     ],

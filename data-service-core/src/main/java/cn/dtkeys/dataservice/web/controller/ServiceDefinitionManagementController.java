@@ -1,6 +1,7 @@
 package cn.dtkeys.dataservice.web.controller;
 
 import cn.dtkeys.dataservice.service.ServiceDefinitionManagementService;
+import cn.dtkeys.dataservice.service.SqlAutoDetectService;
 import cn.dtkeys.dataservice.federation.FederatedMetadataManagementService;
 import cn.dtkeys.dataservice.service.model.DSDefinition;
 import cn.dtkeys.dataservice.service.model.DSField;
@@ -15,12 +16,15 @@ import cn.dtkeys.dataservice.web.dto.admin.service.ParamUpsertRequest;
 import cn.dtkeys.dataservice.web.dto.admin.service.ServiceStatusUpdateRequest;
 import cn.dtkeys.dataservice.web.dto.admin.service.ServiceDefinitionUpsertRequest;
 import cn.dtkeys.dataservice.web.dto.admin.service.ServiceVersionView;
+import cn.dtkeys.dataservice.web.dto.admin.service.SqlAutoDetectRequest;
+import cn.dtkeys.dataservice.web.dto.admin.service.SqlAutoDetectResponse;
 import cn.dtkeys.dataservice.web.dto.admin.service.SourceUpsertRequest;
 import cn.dtkeys.dataservice.web.response.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -38,12 +42,25 @@ import java.util.List;
 public class ServiceDefinitionManagementController {
 
     private final ServiceDefinitionManagementService serviceDefinitionManagementService;
+    private final SqlAutoDetectService sqlAutoDetectService;
     private final FederatedMetadataManagementService federatedMetadataManagementService;
 
     public ServiceDefinitionManagementController(ServiceDefinitionManagementService serviceDefinitionManagementService,
+                                                 SqlAutoDetectService sqlAutoDetectService,
                                                  FederatedMetadataManagementService federatedMetadataManagementService) {
         this.serviceDefinitionManagementService = serviceDefinitionManagementService;
+        this.sqlAutoDetectService = sqlAutoDetectService;
         this.federatedMetadataManagementService = federatedMetadataManagementService;
+    }
+
+    @PostMapping("/sql-auto-detect")
+    public ApiResponse<SqlAutoDetectResponse> autoDetectSql(@Valid @RequestBody SqlAutoDetectRequest request) {
+        return ApiResponse.success(sqlAutoDetectService.detect(
+            request.sqlText(),
+            request.sqlType(),
+            request.defaultConnectionId(),
+            request.defaultCatalogId()
+        ));
     }
 
     @GetMapping
@@ -98,6 +115,12 @@ public class ServiceDefinitionManagementController {
         return ApiResponse.success(serviceDefinitionManagementService.listVersions(id).stream()
             .map(ServiceVersionView::from)
             .toList());
+    }
+
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@PathVariable("id") Long id) {
+        serviceDefinitionManagementService.deleteDefinition(id);
+        return ApiResponse.success(null);
     }
 
     @GetMapping("/{id}/federated-metadata")

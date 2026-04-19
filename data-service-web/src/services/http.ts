@@ -44,6 +44,12 @@ export async function putJson<TResponse, TBody>(url: string, body: TBody): Promi
   })
 }
 
+export async function deleteJson<TResponse>(url: string): Promise<ApiResponse<TResponse>> {
+  return requestJson<TResponse>(url, {
+    method: 'DELETE',
+  })
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<ApiResponse<T>> {
   const response = await fetch(url, {
     headers: JSON_HEADERS,

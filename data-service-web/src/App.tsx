@@ -1,10 +1,8 @@
 import { Suspense } from 'react'
-import { Layout, Menu, Badge, Avatar, Dropdown, Space, Typography, Spin } from 'antd'
+import { Layout, Menu, Badge, Avatar, Dropdown, Space, Typography, Spin, Button, Result } from 'antd'
 import {
   DatabaseOutlined,
-  TableOutlined,
   AppstoreOutlined,
-  ClusterOutlined,
   ExperimentOutlined,
   CloudServerOutlined,
   SafetyCertificateOutlined,
@@ -22,9 +20,7 @@ const { Sider, Content } = Layout
 
 const menuItems = [
   { key: '/datasource', icon: <DatabaseOutlined />, label: '数据源连接' },
-  { key: '/catalog', icon: <TableOutlined />, label: '目标库管理' },
   { key: '/service', icon: <AppstoreOutlined />, label: '数据服务' },
-  { key: '/federation', icon: <ClusterOutlined />, label: '联邦 SQL 平台' },
   { key: '/query-debug', icon: <ExperimentOutlined />, label: '统一查询调试' },
   { key: '/cache', icon: <CloudServerOutlined />, label: '缓存策略' },
   { key: '/publish', icon: <SafetyCertificateOutlined />, label: '发布管理' },
@@ -41,7 +37,7 @@ function App() {
   const location = useLocation()
   const navigate = useNavigate()
   const routePath = location.pathname as AppRoutePath
-  const CurrentPage = appRoutes[routePath] ?? appRoutes['/']
+  const CurrentPage = appRoutes[routePath]
 
   return (
     <Layout className="app-layout">
@@ -50,7 +46,7 @@ function App() {
           <div className="brand-logo">
             <div className="brand-icon" />
             <Typography.Title level={4} className="brand-title">
-              Data Service
+              数据服务
             </Typography.Title>
           </div>
         </div>
@@ -91,7 +87,20 @@ function App() {
             </div>
           }
         >
-          <CurrentPage />
+          {CurrentPage ? (
+            <CurrentPage />
+          ) : (
+            <Result
+              status="404"
+              title="页面不存在"
+              subTitle="当前地址没有对应页面。"
+              extra={
+                <Button type="primary" onClick={() => navigate('/')}>
+                  返回首页
+                </Button>
+              }
+            />
+          )}
         </Suspense>
       </Content>
     </Layout>

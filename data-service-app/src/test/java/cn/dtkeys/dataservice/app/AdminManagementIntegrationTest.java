@@ -14,6 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -634,6 +635,58 @@ class AdminManagementIntegrationTest {
     }
 
     @Test
+    void shouldDeleteDisabledServiceAndAllowRecreateWithSameCode() throws Exception {
+        jdbcTemplate.execute("""
+            insert into ds_connection (connection_code, connection_name, db_type, host, port, username, password_ciphertext,
+                                       status, deleted, created_by, updated_by, connection_config_json)
+            values ('svc_delete_conn', 'Service Delete Conn', 'POSTGRESQL', 'localhost', 5432, 'postgres', 'postgres',
+                    'ENABLED', false, 'tester', 'tester', '{"database":"data_service"}')
+            """);
+        jdbcTemplate.execute("""
+            insert into ds_catalog (connection_id, catalog_code, catalog_name, catalog_type, catalog_value, status,
+                                    deleted, created_by, updated_by)
+            values (1, 'public_schema', 'public', 'SCHEMA', 'public', 'ENABLED', false, 'tester', 'tester')
+            """);
+
+        mockMvc.perform(post("/api/admin/service-definitions")
+                .header("X-Operator", "dev-a")
+                .header("X-Operator-Role", "DEVELOPER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(simpleServiceCreateRequest("delete_me_service",
+                    "select customer_id as customer_customer_id from customer_order where customer_id = :customerId")))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/admin/service-definitions/1")
+                .header("X-Operator", "dev-a")
+                .header("X-Operator-Role", "DEVELOPER"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.nullValue()));
+
+        Integer activeCount = jdbcTemplate.queryForObject("""
+            select count(*) from ds_service where service_code = 'delete_me_service' and deleted = false
+            """, Integer.class);
+        Integer deletedCount = jdbcTemplate.queryForObject("""
+            select count(*) from ds_service where service_code = 'delete_me_service' and deleted = true
+            """, Integer.class);
+        Integer auditCount = jdbcTemplate.queryForObject("""
+            select count(*) from ds_audit_log where event_type = 'DELETE_SERVICE' and target_id = 'delete_me_service'
+            """, Integer.class);
+
+        assertThat(activeCount).isEqualTo(0);
+        assertThat(deletedCount).isEqualTo(1);
+        assertThat(auditCount).isEqualTo(1);
+
+        mockMvc.perform(post("/api/admin/service-definitions")
+                .header("X-Operator", "dev-a")
+                .header("X-Operator-Role", "DEVELOPER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(simpleServiceCreateRequest("delete_me_service",
+                    "select customer_id as customer_customer_id from customer_order where customer_id = :customerId")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.definition.serviceCode").value("delete_me_service"));
+    }
+
+    @Test
     void shouldKeepPublishedVersionSnapshotAfterDraftMutation() throws Exception {
         jdbcTemplate.execute("""
             insert into ds_connection (connection_code, connection_name, db_type, host, port, username, password_ciphertext,
@@ -674,6 +727,164 @@ class AdminManagementIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data[0].version").value(1))
             .andExpect(jsonPath("$.data[0].sqlDefinitionJson").value(org.hamcrest.Matchers.containsString(":customerId")));
+    }
+
+    @Test
+    void shouldPreviewFederatedSqlWhenJoinKeyOnlyConfiguredOnSources() throws Exception {
+        jdbcTemplate.execute("""
+            create table if not exists fed_customer (
+                customer_id bigint not null,
+                customer_name varchar(64) not null
+            )
+            """);
+        jdbcTemplate.execute("""
+            create table if not exists fed_order (
+                customer_id bigint not null,
+                order_amount numeric(18, 2) not null
+            )
+            """);
+        jdbcTemplate.execute("truncate table fed_customer");
+        jdbcTemplate.execute("truncate table fed_order");
+        jdbcTemplate.update("""
+            insert into fed_customer (customer_id, customer_name) values (?, ?), (?, ?)
+            """, 3001L, "Alice", 3002L, "Bob");
+        jdbcTemplate.update("""
+            insert into fed_order (customer_id, order_amount) values (?, ?), (?, ?)
+            """, 3001L, new java.math.BigDecimal("128.00"), 3002L, new java.math.BigDecimal("256.00"));
+
+        jdbcTemplate.execute("""
+            insert into ds_connection (connection_code, connection_name, db_type, host, port, username, password_ciphertext,
+                                       status, deleted, created_by, updated_by, connection_config_json)
+            values ('fed_preview_create_pg', 'Federated Preview Create PG', 'POSTGRESQL', 'localhost', 5432,
+                    'postgres', 'postgres', 'ENABLED', false, 'tester', 'tester', '{"database":"data_service"}')
+            """);
+        jdbcTemplate.execute("""
+            insert into ds_catalog (connection_id, catalog_code, catalog_name, catalog_type, catalog_value, status,
+                                    deleted, created_by, updated_by)
+            values (1, 'public_preview_create', 'public', 'SCHEMA', 'public', 'ENABLED', false, 'tester', 'tester')
+            """);
+
+        mockMvc.perform(post("/api/admin/service-definitions")
+                .header("X-Operator", "dev-preview")
+                .header("X-Operator-Role", "DEVELOPER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "serviceCode": "federated_preview_create_query",
+                      "serviceName": "联邦预览创建查询",
+                      "serviceType": "FEDERATED_QUERY",
+                      "status": "DRAFT",
+                      "sqlTemplate": "select 1",
+                      "sqlType": "FEDERATED_SQL",
+                      "executionMode": "REMOTE_PLUS_LOCAL",
+                      "planStatus": "UNPLANNED",
+                      "currentSqlVersion": 0,
+                      "version": 0,
+                      "maxBatchSize": 20,
+                      "maxResultRows": 200,
+                      "queryTimeoutSeconds": 20,
+                      "federatedQueryTimeoutSeconds": 40,
+                      "sources": [
+                        {
+                          "connectionId": 1,
+                          "catalogId": 1,
+                          "sourceAlias": "pg_customer",
+                          "sourceType": "TABLE",
+                          "sourceValue": "fed_customer",
+                          "joinKey": "customer_id",
+                          "status": "ENABLED"
+                        },
+                        {
+                          "connectionId": 1,
+                          "catalogId": 1,
+                          "sourceAlias": "pg_order",
+                          "sourceType": "TABLE",
+                          "sourceValue": "fed_order",
+                          "joinKey": "customer_id",
+                          "status": "ENABLED"
+                        }
+                      ],
+                      "params": [
+                        {
+                          "paramName": "customerId",
+                          "displayName": "客户号",
+                          "paramType": "LONG",
+                          "sqlPlaceholder": "customerId",
+                          "required": true,
+                          "sortOrder": 1
+                        }
+                      ],
+                      "fields": [
+                        {
+                          "sourceAlias": "pg_customer",
+                          "sourceColumn": "customer_id",
+                          "fieldName": "customerId",
+                          "displayName": "客户号",
+                          "fieldType": "LONG",
+                          "sortOrder": 1,
+                          "primaryKey": true,
+                          "joinKey": false
+                        },
+                        {
+                          "sourceAlias": "pg_customer",
+                          "sourceColumn": "customer_name",
+                          "fieldName": "customerName",
+                          "displayName": "客户名",
+                          "fieldType": "STRING",
+                          "sortOrder": 2,
+                          "primaryKey": false,
+                          "joinKey": false
+                        },
+                        {
+                          "sourceAlias": "pg_order",
+                          "sourceColumn": "order_amount",
+                          "fieldName": "orderAmount",
+                          "displayName": "订单金额",
+                          "fieldType": "DECIMAL",
+                          "sortOrder": 3,
+                          "primaryKey": false,
+                          "joinKey": false
+                        }
+                      ]
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.sources[0].joinKey").value("customer_id"))
+            .andExpect(jsonPath("$.data.sources[1].joinKey").value("customer_id"))
+            .andExpect(jsonPath("$.data.fields[0].joinKey").value(false))
+            .andExpect(jsonPath("$.data.fields[1].joinKey").value(false))
+            .andExpect(jsonPath("$.data.fields[2].joinKey").value(false));
+
+        mockMvc.perform(put("/api/admin/service-definitions/1/federated-sql")
+                .header("X-Operator", "dev-preview")
+                .header("X-Operator-Role", "DEVELOPER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "federatedSqlText": "select pg_customer.customer_id, pg_customer.customer_name, pg_order.order_amount from pg_customer join pg_order on pg_customer.customer_id = pg_order.customer_id where pg_customer.customer_id = :customerId",
+                      "sqlComment": "preview source joinKey"
+                    }
+                    """))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/admin/service-definitions/1/federated-preview")
+                .header("X-Operator", "dev-preview")
+                .header("X-Operator-Role", "DEVELOPER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "federatedSqlText": "select pg_customer.customer_id, pg_customer.customer_name, pg_order.order_amount from pg_customer join pg_order on pg_customer.customer_id = pg_order.customer_id where pg_customer.customer_id = :customerId",
+                      "params": {
+                        "customerId": 3001
+                      }
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].customerId").value(3001))
+            .andExpect(jsonPath("$.data[0].customerName").value("Alice"))
+            .andExpect(jsonPath("$.data[0].orderAmount").value(128.00))
+            .andExpect(jsonPath("$.meta.executedStageCount").value(2));
     }
 
     private String simpleServiceCreateRequest(String serviceCode, String sqlTemplate) {

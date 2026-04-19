@@ -9,17 +9,9 @@ export const appRoutes = {
     const module = await import('../modules/datasource/DatasourceModulePage')
     return { default: module.DatasourceModulePage }
   }),
-  '/catalog': lazy(async () => {
-    const module = await import('../modules/catalog/CatalogModulePage')
-    return { default: module.CatalogModulePage }
-  }),
   '/service': lazy(async () => {
     const module = await import('../modules/service/ServiceModulePage')
-    return { default: module.ServiceModulePage }
-  }),
-  '/federation': lazy(async () => {
-    const module = await import('../modules/federation/FederationModulePage')
-    return { default: module.FederationModulePage }
+    return { default: module.default }
   }),
   '/query-debug': lazy(async () => {
     const module = await import('../modules/query-debug/QueryDebugModulePage')

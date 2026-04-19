@@ -36,7 +36,7 @@ export interface ConnectionDetail {
 export interface SourceItem {
   id?: number
   serviceId?: number
-  connectionId: number
+  connectionId?: number | null
   catalogId?: number | null
   sourceAlias: string
   sourceType: string
@@ -186,6 +186,77 @@ export interface FederatedMetadata {
   plans: SqlPlanItem[]
 }
 
+export interface SqlAutoDetectSource {
+  connectionId?: number | null
+  catalogId?: number | null
+  sourceAlias: string
+  sourceType: string
+  sourceValue: string
+  sourceName: string
+  sqlAlias: string
+  connectionResolved: boolean
+  catalogResolved: boolean
+}
+
+export interface SqlAutoDetectParam {
+  paramName: string
+  displayName: string
+  paramType: string
+  sqlPlaceholder: string
+  required: boolean
+  sortOrder: number
+}
+
+export interface SqlAutoDetectField {
+  sourceAlias?: string | null
+  sourceColumn: string
+  fieldName: string
+  displayName: string
+  fieldType: string
+  sortOrder: number
+  primaryKey: boolean
+  joinKey: boolean
+  selectedExpression: string
+}
+
+export interface SqlAutoDetectResponse {
+  sqlType: string
+  serviceType: string
+  executionMode: string
+  planStatus: string
+  sources: SqlAutoDetectSource[]
+  params: SqlAutoDetectParam[]
+  fields: SqlAutoDetectField[]
+}
+
+export interface AuditLogItem {
+  id: number
+  serviceId?: number | null
+  connectionId?: number | null
+  eventType: string
+  targetType?: string | null
+  targetId?: string | null
+  operator: string
+  operatorRole: string
+  operationResult: string
+  traceId?: string | null
+  requestIp?: string | null
+  changeSummary?: string | null
+  detailJson?: string | null
+  createdAt: string
+  createdBy?: string | null
+}
+
+export interface AuditLogPage {
+  total: number
+  records: AuditLogItem[]
+}
+
+export interface FederatedPreviewRequest {
+  federatedSqlText: string
+  params?: Record<string, unknown>
+}
+
 export interface ConnectionUpsertPayload {
   connectionCode: string
   connectionName: string
@@ -207,8 +278,8 @@ export interface ServiceDefinitionUpsertPayload {
   status?: string
   sqlTemplate?: string
   sqlType: string
-  executionMode: string
-  planStatus: string
+  executionMode?: string
+  planStatus?: string
   currentSqlVersion?: number
   version?: number
   maxBatchSize?: number

@@ -7,3 +7,4 @@
 **/*.tsbuildinfo
 logs/
 .DS_Store
+temp_image/

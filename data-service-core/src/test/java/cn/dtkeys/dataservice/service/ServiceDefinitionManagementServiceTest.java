@@ -34,6 +34,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -193,6 +194,90 @@ class ServiceDefinitionManagementServiceTest {
             .hasMessage("仅允许停用已发布服务");
     }
 
+    @Test
+    void shouldAutoResolveExecutionModePlanStatusAndSystemLimitsOnCreate() {
+        OperatorContext.setOperator("dev-a");
+        OperatorContext.setRole("DEVELOPER");
+        DSDefinition definition = new DSDefinition();
+        definition.setServiceCode("customer_profile");
+        definition.setServiceName("客户画像");
+        definition.setServiceType("SIMPLE_QUERY");
+        definition.setSqlTemplate("select c.customer_id from customer_base c join customer_order o on c.customer_id = o.customer_id");
+        definition.setSqlType("SIMPLE_SQL");
+        definition.setMaxBatchSize(50);
+        definition.setMaxResultRows(500);
+        definition.setQueryTimeoutSeconds(10);
+        definition.setFederatedQueryTimeoutSeconds(20);
+        definition.setVersion(0);
+        when(dsDefinitionRepository.findByServiceCode("customer_profile")).thenReturn(null);
+        when(dsDefinitionRepository.findById(11L)).thenReturn(definition);
+        when(dsSourceRepository.findByServiceId(11L)).thenReturn(List.of(buildSource(), buildSecondSource()));
+        when(dsParamRepository.findByServiceId(11L)).thenReturn(List.of(buildParam()));
+        when(dsFieldRepository.findByServiceId(11L)).thenReturn(List.of(buildField()));
+        when(dsSqlValidateLogRepository.findByServiceIdAndVersion(11L, 0)).thenReturn(List.of());
+        when(dsSqlPlanRepository.findByServiceIdAndVersion(11L, 0)).thenReturn(List.of());
+
+        doAnswer(invocation -> {
+            DSDefinition inserted = invocation.getArgument(0);
+            inserted.setId(11L);
+            return null;
+        }).when(dsDefinitionRepository).insert(any(DSDefinition.class));
+
+        serviceDefinitionManagementService.createDraft(
+            definition,
+            List.of(buildSource(), buildSecondSource()),
+            List.of(buildParam()),
+            List.of(buildField())
+        );
+
+        ArgumentCaptor<DSDefinition> definitionCaptor = ArgumentCaptor.forClass(DSDefinition.class);
+        verify(dsDefinitionRepository).insert(definitionCaptor.capture());
+        assertThat(definitionCaptor.getValue().getServiceType()).isEqualTo("SIMPLE_QUERY");
+        assertThat(definitionCaptor.getValue().getExecutionMode()).isEqualTo("REMOTE_PLUS_LOCAL");
+        assertThat(definitionCaptor.getValue().getPlanStatus()).isEqualTo("UNPLANNED");
+        assertThat(definitionCaptor.getValue().getMaxBatchSize()).isNull();
+        assertThat(definitionCaptor.getValue().getMaxResultRows()).isNull();
+        assertThat(definitionCaptor.getValue().getQueryTimeoutSeconds()).isNull();
+        assertThat(definitionCaptor.getValue().getFederatedQueryTimeoutSeconds()).isNull();
+    }
+
+    @Test
+    void shouldAutoResolveFederatedDefinitionOnUpdateWithoutManualFields() {
+        OperatorContext.setOperator("dev-a");
+        OperatorContext.setRole("DEVELOPER");
+        DSDefinition existing = buildDefinition(12L, "federated_customer", "DRAFT", 1);
+        when(dsDefinitionRepository.findById(12L)).thenReturn(existing);
+        when(dsDefinitionRepository.findByServiceCode("federated_customer")).thenReturn(existing);
+        when(dsSourceRepository.findByServiceId(12L)).thenReturn(List.of(buildSource()));
+        when(dsParamRepository.findByServiceId(12L)).thenReturn(List.of(buildParam()));
+        when(dsFieldRepository.findByServiceId(12L)).thenReturn(List.of(buildField()));
+        when(dsSqlValidateLogRepository.findByServiceIdAndVersion(12L, 1)).thenReturn(List.of());
+        when(dsSqlPlanRepository.findByServiceIdAndVersion(12L, 1)).thenReturn(List.of());
+
+        DSDefinition updating = new DSDefinition();
+        updating.setServiceCode("federated_customer");
+        updating.setServiceName("联邦客户查询");
+        updating.setServiceType("SIMPLE_QUERY");
+        updating.setSqlTemplate("select c.customer_id from customer_base c");
+        updating.setSqlType("FEDERATED_SQL");
+
+        serviceDefinitionManagementService.updateDraft(
+            12L,
+            updating,
+            List.of(buildSource()),
+            List.of(buildParam()),
+            List.of(buildField())
+        );
+
+        ArgumentCaptor<DSDefinition> definitionCaptor = ArgumentCaptor.forClass(DSDefinition.class);
+        verify(dsDefinitionRepository).update(definitionCaptor.capture());
+        assertThat(definitionCaptor.getValue().getServiceType()).isEqualTo("FEDERATED_QUERY");
+        assertThat(definitionCaptor.getValue().getExecutionMode()).isEqualTo("REMOTE_PLUS_LOCAL");
+        assertThat(definitionCaptor.getValue().getPlanStatus()).isEqualTo("UNPLANNED");
+        assertThat(definitionCaptor.getValue().getMaxBatchSize()).isNull();
+        assertThat(definitionCaptor.getValue().getMaxResultRows()).isNull();
+    }
+
     private DSDefinition buildDefinition(Long id, String serviceCode, String status, int version) {
         DSDefinition definition = new DSDefinition();
         definition.setId(id);
@@ -216,6 +301,17 @@ class ServiceDefinitionManagementServiceTest {
         source.setConnectionId(1L);
         source.setCatalogId(1L);
         source.setSourceAlias("customer");
+        source.setSourceType("TABLE");
+        source.setSourceValue("customer_order");
+        source.setStatus("ENABLED");
+        return source;
+    }
+
+    private DSSource buildSecondSource() {
+        DSSource source = new DSSource();
+        source.setConnectionId(2L);
+        source.setCatalogId(2L);
+        source.setSourceAlias("order");
         source.setSourceType("TABLE");
         source.setSourceValue("customer_order");
         source.setStatus("ENABLED");

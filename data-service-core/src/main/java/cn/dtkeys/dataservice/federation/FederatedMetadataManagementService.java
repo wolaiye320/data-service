@@ -388,10 +388,12 @@ public class FederatedMetadataManagementService {
         Set<String> configuredSources = dsSourceRepository.findByServiceId(serviceId).stream()
             .flatMap(source -> java.util.stream.Stream.of(source.getSourceAlias(), source.getSourceValue()))
             .filter(value -> value != null && !value.isBlank())
+            .flatMap(value -> java.util.stream.Stream.of(value, stripSchemaPrefix(value)))
             .map(value -> value.trim().toLowerCase(Locale.ROOT))
             .collect(Collectors.toSet());
         List<String> unknownSources = validationResult.recognizedSources().stream()
-            .filter(source -> !configuredSources.contains(source.trim().toLowerCase(Locale.ROOT)))
+            .filter(source -> !configuredSources.contains(source.trim().toLowerCase(Locale.ROOT))
+                && !configuredSources.contains(stripSchemaPrefix(source).trim().toLowerCase(Locale.ROOT)))
             .toList();
         if (unknownSources.isEmpty()) {
             return validationResult;
@@ -422,6 +424,12 @@ public class FederatedMetadataManagementService {
         if (capability.getEnabled() == null) {
             capability.setEnabled(Boolean.TRUE);
         }
+    }
+
+    private String stripSchemaPrefix(String sourceName) {
+        String value = sourceName == null ? "" : sourceName.trim();
+        int dotIndex = value.lastIndexOf('.');
+        return dotIndex >= 0 ? value.substring(dotIndex + 1) : value;
     }
 
     private void persistValidationLogs(Long serviceId,

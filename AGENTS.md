@@ -127,7 +127,7 @@
 ## 4.MCP规范
 
 - 操作系统元数据库时，必须使用 MCP `data_service`；
-- 联邦查询postgresql业务数据库 `bankdb` 时，必须使用 MCP `bankdb`,限定操作schema为“ist”, 联邦查询mysql业务数据库 `bcs` 时，必须使用 MCP `bcs`
+- 联邦查询postgresql业务数据库 `federation` 时，必须使用 MCP `postg_federation1`, 联邦查询mysql业务数据库 `mysql_federation` 时，必须使用 MCP `mysql_federation`
 
 
 ## 5. Skills 使用规范
@@ -231,6 +231,7 @@
 
 - 涉及单元测试、集成测试、E2E、覆盖率、测试分层、命名规范、门禁要求时：
   必须先阅读 `@docs/research/common/测试规范.md`
+- 不要使用容器，所有测试必须在本地运行。  
 
 ### 6.6 Git 与协作
 

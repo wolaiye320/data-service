@@ -27,23 +27,21 @@ export function ActionIconButton({
   htmlType,
 }: ActionIconButtonProps) {
   const button = (
-    <Tooltip title={label}>
-      <Button
-        type="text"
-        icon={icon}
-        aria-label={label}
-        data-testid={`action-${label}`}
-        loading={loading}
-        danger={danger}
-        disabled={disabled}
-        onClick={confirmTitle ? undefined : onClick}
-        htmlType={htmlType}
-      />
-    </Tooltip>
+    <Button
+      type="text"
+      icon={icon}
+      aria-label={label}
+      data-testid={`action-${label}`}
+      loading={loading}
+      danger={danger}
+      disabled={disabled}
+      onClick={confirmTitle ? undefined : onClick}
+      htmlType={htmlType}
+    />
   )
 
   if (!confirmTitle) {
-    return button
+    return <Tooltip title={label}>{button}</Tooltip>
   }
 
   return (

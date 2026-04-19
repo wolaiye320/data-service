@@ -102,6 +102,7 @@ public class ServiceDefinitionManagementService {
                                                List<DSSource> sources,
                                                List<DSParam> params,
                                                List<DSField> fields) {
+        normalizeDefinition(definition, sources);
         validateDefinition(definition, true);
         ensureServiceCodeNotExists(definition.getServiceCode(), null);
         String operator = OperatorContext.getOperator().orElse("SYSTEM");
@@ -141,6 +142,7 @@ public class ServiceDefinitionManagementService {
         if (!"DRAFT".equalsIgnoreCase(existing.getStatus())) {
             throw new ParamInvalidException("仅允许编辑草稿态服务");
         }
+        normalizeDefinition(definition, sources);
         validateDefinition(definition, false);
         ensureServiceCodeNotExists(definition.getServiceCode(), id);
         String operator = OperatorContext.getOperator().orElse("SYSTEM");
@@ -248,6 +250,30 @@ public class ServiceDefinitionManagementService {
         return dsServiceVersionRepository.findByServiceId(id);
     }
 
+    public void deleteDefinition(Long id) {
+        DSDefinition existing = dsDefinitionRepository.findById(id);
+        if (existing == null) {
+            throw new ServiceNotFoundException("未找到数据服务: " + id);
+        }
+        if ("PUBLISHED".equalsIgnoreCase(existing.getStatus())) {
+            throw new ParamInvalidException("已发布服务不允许直接删除，请先停用");
+        }
+        String operator = OperatorContext.getOperator().orElse("SYSTEM");
+        dsDefinitionRepository.softDeleteById(id, operator);
+        auditLogService.record(AuditEvent.of(
+            AuditAction.DELETE_SERVICE.name(),
+            id,
+            null,
+            "SERVICE",
+            existing.getServiceCode(),
+            operator,
+            OperatorContext.getRole().orElse("SYSTEM"),
+            "SUCCESS",
+            "删除服务",
+            Map.of("status", existing.getStatus(), "version", existing.getVersion())
+        ));
+    }
+
     private void replaceChildren(Long serviceId,
                                  List<DSSource> sources,
                                  List<DSParam> params,
@@ -305,15 +331,48 @@ public class ServiceDefinitionManagementService {
         if (isBlank(definition.getSqlType())) {
             throw new ParamInvalidException("sqlType 不能为空");
         }
-        if (isBlank(definition.getExecutionMode())) {
-            throw new ParamInvalidException("executionMode 不能为空");
-        }
-        if (isBlank(definition.getPlanStatus())) {
-            throw new ParamInvalidException("planStatus 不能为空");
-        }
         if (!isBlank(definition.getSqlTemplate())) {
             sqlReadOnlyValidator.validate(definition.getSqlTemplate());
         }
+    }
+
+    private void normalizeDefinition(DSDefinition definition, List<DSSource> sources) {
+        definition.setServiceType(resolveServiceType(definition));
+        definition.setExecutionMode(resolveExecutionMode(definition, sources));
+        definition.setPlanStatus(resolvePlanStatus(definition));
+        definition.setMaxBatchSize(null);
+        definition.setMaxResultRows(null);
+        definition.setQueryTimeoutSeconds(null);
+        definition.setFederatedQueryTimeoutSeconds(null);
+    }
+
+    private String resolveServiceType(DSDefinition definition) {
+        if ("FEDERATED_SQL".equalsIgnoreCase(definition.getSqlType())
+            || "FEDERATED_QUERY".equalsIgnoreCase(definition.getServiceType())) {
+            return "FEDERATED_QUERY";
+        }
+        return "SIMPLE_QUERY";
+    }
+
+    private String resolveExecutionMode(DSDefinition definition, List<DSSource> sources) {
+        if ("FEDERATED_SQL".equalsIgnoreCase(definition.getSqlType())) {
+            return "REMOTE_PLUS_LOCAL";
+        }
+        if (sources != null && sources.size() > 1) {
+            return "REMOTE_PLUS_LOCAL";
+        }
+        String sqlTemplate = definition.getSqlTemplate();
+        if (!isBlank(sqlTemplate) && sqlTemplate.toUpperCase().contains(" JOIN ")) {
+            return "REMOTE_PLUS_LOCAL";
+        }
+        return "REMOTE_ONLY";
+    }
+
+    private String resolvePlanStatus(DSDefinition definition) {
+        if ("PUBLISHED".equalsIgnoreCase(definition.getStatus())) {
+            return "PUBLISHED";
+        }
+        return "UNPLANNED";
     }
 
     private void validatePublish(ServiceDefinitionDetail detail) {

@@ -41,17 +41,14 @@ test.describe('第一阶段前端联调', () => {
 
     await page.goto('/datasource')
     await page.waitForLoadState('networkidle')
-    await expect(page.getByRole('heading', { name: '数据源连接管理' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '数据源连接' })).toBeVisible()
     await expect(page.getByRole('columnheader', { name: '连接编码' })).toBeVisible()
-    await expect(page.getByRole('cell', { name: /.+/ }).first()).toBeVisible()
-
-    await page.getByRole('menuitem', { name: /目标库管理/ }).click()
-    await page.waitForLoadState('networkidle')
-    await expect(page.getByRole('heading', { name: '目标库管理' })).toBeVisible()
+    await expect(page.getByRole('cell', { name: connection.connection.connectionCode, exact: true })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: /目标库管理/ })).toHaveCount(0)
 
     await page.getByRole('menuitem', { name: /数据服务/ }).click()
     await page.waitForLoadState('networkidle')
-    await expect(page.getByRole('heading', { name: '数据服务配置' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '数据服务' })).toBeVisible()
     await expect(page.getByRole('cell', { name: draft.definition.serviceCode, exact: true })).toBeVisible()
 
     await page.getByRole('menuitem', { name: /发布管理/ }).click()
@@ -69,6 +66,44 @@ test.describe('第一阶段前端联调', () => {
 
     expect(failedResponses).toEqual([])
     expect(consoleErrors).toEqual([])
+  })
+
+  test('数据源连接页在常见笔记本宽度下展示列表并通过详情按钮打开抽屉', async ({ page, request }) => {
+    const connection = await createPostgresConnection(request, {
+      connectionCode: uniqueCode('pw_split_conn'),
+    })
+    const connectionCode = connection.connection.connectionCode
+
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto('/datasource')
+    await page.waitForLoadState('networkidle')
+
+    await expect(page.getByRole('heading', { name: '数据源连接' })).toBeVisible()
+    const listCard = page.getByTestId('datasource-list-card')
+    const connectionRow = listCard
+      .locator('.ant-table-tbody tr:not(.ant-table-measure-row)')
+      .filter({ hasText: connectionCode })
+      .first()
+    await expect(connectionRow).toBeVisible()
+
+    const detailTrigger = page.getByLabel(`查看连接详情 ${connectionCode}`)
+    await expect(detailTrigger).toBeVisible()
+    await detailTrigger.click()
+
+    const detailDrawer = page.getByRole('dialog', { name: `连接详情 · ${connectionCode}` })
+    await expect(detailDrawer).toBeVisible()
+    await expect(detailDrawer.getByText(`连接详情 · ${connectionCode}`)).toBeVisible()
+
+    const viewport = page.viewportSize()
+    const listBox = await listCard.boundingBox()
+    const detailBox = await detailDrawer.boundingBox()
+
+    expect(viewport).not.toBeNull()
+    expect(listBox).not.toBeNull()
+    expect(detailBox).not.toBeNull()
+
+    expect(listBox!.y).toBeLessThan((viewport?.height ?? 0) / 2)
+    expect(detailBox!.x).toBeGreaterThan(listBox!.x + 120)
   })
 
   test('统一查询调试页可通过前端代理完成真实查询', async ({ page, request }) => {

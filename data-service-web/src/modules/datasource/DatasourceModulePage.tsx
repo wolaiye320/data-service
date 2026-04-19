@@ -16,6 +16,7 @@ import {
 } from 'antd'
 import {
   EditOutlined,
+  EyeOutlined,
   PlayCircleOutlined,
   PauseCircleOutlined,
   CheckCircleOutlined,
@@ -63,6 +64,7 @@ export function DatasourceModulePage() {
   const [saving, setSaving] = useState(false)
   const [submittingAction, setSubmittingAction] = useState<number | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
   const [connections, setConnections] = useState<ConnectionItem[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [detail, setDetail] = useState<ConnectionDetail | null>(null)
@@ -134,6 +136,11 @@ export function DatasourceModulePage() {
         render: (_, record) => (
           <Space size={4}>
             <ActionIconButton
+              icon={<EyeOutlined />}
+              label={`查看连接详情 ${record.connectionCode}`}
+              onClick={() => void openDetail(record.id ?? null)}
+            />
+            <ActionIconButton
               icon={<EditOutlined />}
               label={`编辑连接 ${record.connectionCode}`}
               onClick={() => openEdit(record.id ?? null)}
@@ -156,6 +163,15 @@ export function DatasourceModulePage() {
     ],
     [submittingAction],
   )
+
+  async function openDetail(id: number | null) {
+    if (!id) {
+      return
+    }
+    setSelectedId(id)
+    await loadDetail(id)
+    setDetailDrawerOpen(true)
+  }
 
   async function openEdit(id: number | null) {
     if (!id) {
@@ -258,8 +274,8 @@ export function DatasourceModulePage() {
         </Button>
       </div>
 
-      <div className="module-grid">
-        <Card title="连接列表" className="li-page-main-card">
+      <div className="datasource-workspace">
+        <Card title="连接列表" className="li-page-main-card datasource-list-card" data-testid="datasource-list-card">
           {loading ? (
             <Spin />
           ) : (
@@ -269,63 +285,64 @@ export function DatasourceModulePage() {
               dataSource={connections}
               pagination={false}
               size="small"
-              onRow={(record) => ({
-                onClick: () => {
-                  if (record.id) {
-                    setSelectedId(record.id)
-                  }
-                },
-              })}
+              scroll={{ x: 760 }}
               rowClassName={(record) => (record.id === selectedId ? 'li-table-row-selected' : '')}
             />
           )}
         </Card>
-
-        <Card title="连接详情" className="li-page-main-card">
-          {!detail ? (
-            <Alert type="info" showIcon message="请选择一个连接查看详情" />
-          ) : (
-            <Space direction="vertical" size={16} style={{ width: '100%' }}>
-              <Descriptions size="small" column={2} bordered>
-                <Descriptions.Item label="连接编码">{detail.connection.connectionCode}</Descriptions.Item>
-                <Descriptions.Item label="状态">{renderStatusText(detail.connection.status)}</Descriptions.Item>
-                <Descriptions.Item label="数据库类型">{detail.connection.dbType}</Descriptions.Item>
-                <Descriptions.Item label="主机端口">
-                  {detail.connection.host}:{detail.connection.port}
-                </Descriptions.Item>
-                <Descriptions.Item label="用户名">{detail.connection.username}</Descriptions.Item>
-                <Descriptions.Item label="扩展配置">
-                  <Typography.Text code>{detail.connection.connectionConfigJson || '未配置'}</Typography.Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="备注" span={2}>
-                  {detail.connection.remark || '无'}
-                </Descriptions.Item>
-              </Descriptions>
-
-              <div>
-                <Typography.Title level={5}>目标库列表</Typography.Title>
-                <Table<CatalogItem>
-                  rowKey={(record) => `${record.catalogCode}-${record.catalogValue}`}
-                  size="small"
-                  pagination={false}
-                  dataSource={detail.catalogs}
-                  columns={[
-                    { title: '编码', dataIndex: 'catalogCode' },
-                    { title: '名称', dataIndex: 'catalogName' },
-                    { title: '类型', dataIndex: 'catalogType' },
-                    { title: '值', dataIndex: 'catalogValue' },
-                    {
-                      title: '状态',
-                      dataIndex: 'status',
-                      render: (value: string | undefined) => renderStatusText(value ?? 'ENABLED'),
-                    },
-                  ]}
-                />
-              </div>
-            </Space>
-          )}
-        </Card>
       </div>
+
+      <Drawer
+        title={detail ? `连接详情 · ${detail.connection.connectionCode}` : '连接详情'}
+        width={640}
+        open={detailDrawerOpen}
+        onClose={() => setDetailDrawerOpen(false)}
+        destroyOnHidden
+      >
+        {!detail ? (
+          <Alert type="info" showIcon message="请选择一个连接查看详情" />
+        ) : (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Descriptions size="small" column={2} bordered>
+              <Descriptions.Item label="连接编码">{detail.connection.connectionCode}</Descriptions.Item>
+              <Descriptions.Item label="状态">{renderStatusText(detail.connection.status)}</Descriptions.Item>
+              <Descriptions.Item label="数据库类型">{detail.connection.dbType}</Descriptions.Item>
+              <Descriptions.Item label="主机端口">
+                {detail.connection.host}:{detail.connection.port}
+              </Descriptions.Item>
+              <Descriptions.Item label="用户名">{detail.connection.username}</Descriptions.Item>
+              <Descriptions.Item label="扩展配置">
+                <Typography.Text code>{detail.connection.connectionConfigJson || '未配置'}</Typography.Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="备注" span={2}>
+                {detail.connection.remark || '无'}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div>
+              <Typography.Title level={5}>目标库列表</Typography.Title>
+              <Table<CatalogItem>
+                rowKey={(record) => `${record.catalogCode}-${record.catalogValue}`}
+                size="small"
+                pagination={false}
+                dataSource={detail.catalogs}
+                locale={{ emptyText: '当前连接未配置目标库' }}
+                columns={[
+                  { title: '编码', dataIndex: 'catalogCode' },
+                  { title: '名称', dataIndex: 'catalogName' },
+                  { title: '类型', dataIndex: 'catalogType' },
+                  { title: '值', dataIndex: 'catalogValue' },
+                  {
+                    title: '状态',
+                    dataIndex: 'status',
+                    render: (value: string | undefined) => renderStatusText(value ?? 'ENABLED'),
+                  },
+                ]}
+              />
+            </div>
+          </Space>
+        )}
+      </Drawer>
 
       <Drawer
         title={editingConnection ? `编辑连接 · ${editingConnection.connectionCode}` : '新建连接'}

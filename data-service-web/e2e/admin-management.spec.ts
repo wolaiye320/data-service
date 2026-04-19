@@ -16,6 +16,14 @@ async function chooseSelectOption(page: Parameters<typeof test>[0]['page'], inpu
   await page.locator(`.ant-select-dropdown:visible [title="${optionTitle}"]`).first().click()
 }
 
+async function confirmVisiblePopconfirm(page: Parameters<typeof test>[0]['page']) {
+  const confirmButton = page.locator('.ant-popover:visible .ant-popconfirm-buttons .ant-btn-primary').last()
+  await expect(confirmButton).toBeVisible()
+  await confirmButton.evaluate((element) => {
+    ;(element as HTMLButtonElement).click()
+  })
+}
+
 test.describe('管理端未执行主流程补测', () => {
   test('连接管理可新增 PostgreSQL 连接、编辑后保持脱敏，并对非法参数显示失败提示', async ({ page, request }) => {
     test.setTimeout(60_000)
@@ -111,7 +119,7 @@ test.describe('管理端未执行主流程补测', () => {
     expect(definitionList.ok()).toBeTruthy()
   })
 
-  test('服务配置可创建草稿、发布、停用，并在配置缺失时阻止发布', async ({ page, request }) => {
+  test('服务配置可创建草稿、查看、发布、停用、删除，并在配置缺失时阻止发布', async ({ page, request }) => {
     test.setTimeout(60_000)
     const baseConnection = await createPostgresConnection(request, {
       connectionCode: uniqueCode('pw_svc_conn'),
@@ -120,9 +128,9 @@ test.describe('管理端未执行主流程补测', () => {
     const invalidServiceCode = uniqueCode('pw_svc_invalid')
 
     await page.goto('/service')
-    await expect(page.getByRole('heading', { name: '数据服务配置与发布' })).toBeVisible()
+    await expect(page.locator('.module-hero').getByText('数据服务')).toBeVisible()
 
-    await page.getByRole('button', { name: '新建服务草稿' }).click()
+    await page.getByRole('button', { name: '新建服务' }).click()
     await page.getByLabel('服务编码').fill(serviceCode)
     await page.getByLabel('服务名称').fill(`Playwright 服务 ${serviceCode}`)
     await page.getByLabel('SQL 模板').fill(
@@ -153,10 +161,18 @@ test.describe('管理端未执行主流程补测', () => {
     await page.getByRole('button', { name: /保存草稿/ }).click()
 
     await expect(page.locator('.ant-message-notice').getByText('服务草稿已创建')).toBeVisible()
-    const createdCell = page.locator('.ant-table-tbody').first().getByRole('cell', { name: serviceCode, exact: true })
+    const serviceRow = page.locator('.ant-table-tbody').first().getByRole('row', {
+      name: new RegExp(`${serviceCode}\\s+Playwright 服务 ${serviceCode}`),
+    })
+    const createdCell = serviceRow.getByRole('cell', { name: serviceCode, exact: true })
     await expect(createdCell).toBeVisible()
     await createdCell.click()
     await expect(page.getByText('草稿').first()).toBeVisible()
+
+    await page.getByLabel(`查看服务 ${serviceCode}`).click()
+    await expect(page.getByText('服务概览')).toBeVisible()
+    await expect(page.getByText(serviceCode, { exact: true }).last()).toBeVisible()
+    await expect(page.locator('.federation-plan-card').getByText('普通服务').first()).toBeVisible()
 
     const publishResponsePromise = page.waitForResponse(
       (response) =>
@@ -165,10 +181,10 @@ test.describe('管理端未执行主流程补测', () => {
         response.url().endsWith('/publish') &&
         response.status() < 500,
     )
-    await page.getByLabel(`发布服务 ${serviceCode}`).click()
+    await serviceRow.getByLabel(`发布服务 ${serviceCode}`).click()
     const publishResponse = await publishResponsePromise
     expect(publishResponse.status()).toBe(200)
-    await expect(page.getByText('已发布').first()).toBeVisible()
+    await expect(serviceRow).toContainText('已发布')
 
     const disableResponsePromise = page.waitForResponse(
       (response) =>
@@ -177,11 +193,24 @@ test.describe('管理端未执行主流程补测', () => {
         response.url().endsWith('/status') &&
         response.status() < 500,
     )
-    await page.getByLabel(`停用服务 ${serviceCode}`).click()
-    await page.getByRole('button', { name: /确\s*定/ }).click()
+    await serviceRow.getByLabel(`停用服务 ${serviceCode}`).click()
+    await confirmVisiblePopconfirm(page)
     const disableResponse = await disableResponsePromise
     expect(disableResponse.status()).toBe(200)
-    await expect(page.getByText('已停用').first()).toBeVisible()
+    await expect(serviceRow).toContainText('已停用')
+
+    const deleteResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'DELETE' &&
+        response.url().includes('/api/admin/service-definitions/') &&
+        response.status() < 500,
+    )
+    await serviceRow.getByLabel(`删除服务 ${serviceCode}`).click()
+    await confirmVisiblePopconfirm(page)
+    const deleteResponse = await deleteResponsePromise
+    expect(deleteResponse.status()).toBe(200)
+    await expect(page.locator('.ant-message-notice').getByText('服务已删除')).toBeVisible()
+    await expect(serviceRow).toHaveCount(0)
 
     const invalidDraft = await createSimpleQueryDraft(request, {
       serviceCode: invalidServiceCode,
@@ -202,7 +231,60 @@ test.describe('管理端未执行主流程补测', () => {
 
   })
 
-  test('联邦平台对非法 SQL 和来源不一致展示明确错误', async ({ page, request }) => {
+  test('服务配置可通过 SQL 自动识别创建草稿', async ({ page, request }) => {
+    test.setTimeout(60_000)
+    const baseConnection = await createPostgresConnection(request, {
+      connectionCode: uniqueCode('pw_sql_detect_conn'),
+    })
+    const serviceCode = uniqueCode('pw_sql_detect')
+
+    await page.goto('/service')
+    await expect(page.locator('.module-hero').getByText('数据服务')).toBeVisible()
+
+    await page.getByRole('button', { name: '新建服务' }).click()
+    await page.getByLabel('服务编码').fill(serviceCode)
+    await page.getByLabel('服务名称').fill(`SQL 即服务 ${serviceCode}`)
+    await page.getByLabel('默认连接').click()
+    await page.locator('.ant-select-dropdown:visible input').fill(baseConnection.connection.connectionCode)
+    await page.locator('.ant-select-dropdown:visible .ant-select-item-option').first().click()
+    await page.getByLabel('SQL').fill(
+      'select cb.customer_id as customerId, cb.customer_name as customerName from customer_base cb where cb.customer_id = :customerId and cb.active = :active',
+    )
+
+    const detectResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().endsWith('/api/admin/service-definitions/sql-auto-detect') &&
+        response.status() === 200,
+    )
+    await page.getByRole('button', { name: '自动识别来源/参数/字段' }).click()
+    const detectResponse = await detectResponsePromise
+    expect(detectResponse.status()).toBe(200)
+
+    await expect(page.locator('#sources_0_sourceAlias')).toHaveValue('cb')
+    await expect(page.locator('#sources_0_sourceValue')).toHaveValue('customer_base')
+    await expect(page.locator('#params_0_paramName')).toHaveValue('customerId')
+    await expect(page.locator('#params_1_paramName')).toHaveValue('active')
+    await expect(page.locator('#fields_0_fieldName')).toHaveValue('customerId')
+    await expect(page.locator('#fields_1_fieldName')).toHaveValue('customerName')
+
+    const createResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().endsWith('/api/admin/service-definitions') &&
+        response.status() === 200,
+    )
+    await page.getByRole('button', { name: /保存草稿/ }).click()
+    const createResponse = await createResponsePromise
+    expect(createResponse.status()).toBe(200)
+
+    const serviceRow = page.locator('.ant-table-tbody').first().getByRole('row', {
+      name: new RegExp(`${serviceCode}\\s+SQL 即服务 ${serviceCode}`),
+    })
+    await expect(serviceRow).toBeVisible()
+  })
+
+  test('数据服务页对非法联邦 SQL 和来源不一致展示明确错误', async ({ page, request }) => {
     test.setTimeout(60_000)
     const primary = await createPostgresConnection(request, {
       connectionCode: uniqueCode('pw_fed_primary'),
@@ -217,9 +299,16 @@ test.describe('管理端未执行主流程补测', () => {
       childCatalogId: child.catalogs[0].id!,
     })
 
-    await page.goto('/federation')
-    await expect(page.getByRole('heading', { name: '联邦 SQL 平台' })).toBeVisible()
+    await page.goto('/service')
+    await expect(page.locator('.module-hero').getByText('数据服务')).toBeVisible()
+    const workspaceResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        response.url().includes(`/api/admin/service-definitions/${draft.definition.id}/federated-metadata`) &&
+        response.status() === 200,
+    )
     await page.locator('.ant-table-tbody').first().getByRole('cell', { name: draft.definition.serviceCode, exact: true }).click()
+    await workspaceResponsePromise
     await expect(page.getByLabel('联邦 SQL')).toBeVisible()
 
     await page.getByLabel('联邦 SQL').fill('SELECT FROM')
