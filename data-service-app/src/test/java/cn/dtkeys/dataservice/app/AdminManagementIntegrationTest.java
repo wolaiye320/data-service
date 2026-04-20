@@ -107,10 +107,10 @@ class AdminManagementIntegrationTest {
                   "status": "ENABLED"
                 },
                 {
-                  "catalogCode": "bank_database",
-                  "catalogName": "data_service",
-                  "catalogType": "DATABASE",
-                  "catalogValue": "data_service",
+                  "catalogCode": "pg_catalog_schema",
+                  "catalogName": "pg_catalog",
+                  "catalogType": "SCHEMA",
+                  "catalogValue": "pg_catalog",
                   "status": "ENABLED"
                 }
               ]
@@ -197,10 +197,10 @@ class AdminManagementIntegrationTest {
                   "status": "ENABLED"
                 },
                 {
-                  "catalogCode": "analytics_schema",
-                  "catalogName": "analytics",
+                  "catalogCode": "pg_catalog_schema",
+                  "catalogName": "pg_catalog",
                   "catalogType": "SCHEMA",
-                  "catalogValue": "public",
+                  "catalogValue": "pg_catalog",
                   "status": "ENABLED"
                 }
               ]
