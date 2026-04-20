@@ -20,9 +20,14 @@ import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * 数据源连接管理应用服务。
@@ -80,16 +85,20 @@ public class ConnectionManagementService {
 
     public ConnectionDetail createConnection(DSConnection connection, List<DSCatalog> catalogs) {
         validateConnection(connection, true);
-        validateCatalogs(catalogs);
+        List<DSCatalog> normalizedCatalogs = normalizeCatalogs(connection.getDbType(), catalogs);
+        validateCatalogs(connection.getDbType(), normalizedCatalogs);
         ensureConnectionCodeNotExists(connection.getConnectionCode(), null);
-        testConnectionInternal(connection, catalogs);
+        testConnectionInternal(connection, normalizedCatalogs);
 
         String operator = OperatorContext.getOperator().orElse("SYSTEM");
         connection.setDeleted(false);
         connection.setCreatedBy(operator);
         connection.setUpdatedBy(operator);
         dsConnectionRepository.insert(connection);
-        replaceCatalogs(connection.getId(), catalogs, operator);
+        if (connection.getId() == null) {
+            connection.setId(dsConnectionRepository.findByCode(connection.getConnectionCode()).getId());
+        }
+        replaceCatalogs(connection.getId(), normalizedCatalogs, operator);
         auditLogService.record(AuditEvent.of(
             AuditAction.CREATE_CONNECTION.name(),
             null,
@@ -100,7 +109,7 @@ public class ConnectionManagementService {
             OperatorContext.getRole().orElse("SYSTEM"),
             "SUCCESS",
             "新增数据源连接",
-            buildConnectionAuditDetail(null, connection, catalogs)
+            buildConnectionAuditDetail(null, connection, normalizedCatalogs)
         ));
         return getConnection(connection.getId());
     }
@@ -114,9 +123,10 @@ public class ConnectionManagementService {
             connection.setConnectionConfigJson(existing.getConnectionConfigJson());
         }
         validateConnection(connection, false);
-        validateCatalogs(catalogs);
+        List<DSCatalog> normalizedCatalogs = normalizeCatalogs(connection.getDbType(), catalogs);
+        validateCatalogs(connection.getDbType(), normalizedCatalogs);
         ensureConnectionCodeNotExists(connection.getConnectionCode(), id);
-        testConnectionInternal(connection, catalogs);
+        testConnectionInternal(connection, normalizedCatalogs);
 
         String operator = OperatorContext.getOperator().orElse("SYSTEM");
         connection.setId(id);
@@ -124,7 +134,7 @@ public class ConnectionManagementService {
         connection.setCreatedBy(existing.getCreatedBy());
         connection.setUpdatedBy(operator);
         dsConnectionRepository.update(connection);
-        replaceCatalogs(id, catalogs, operator);
+        replaceCatalogs(id, normalizedCatalogs, operator);
         auditLogService.record(AuditEvent.of(
             AuditAction.UPDATE_CONNECTION.name(),
             null,
@@ -135,7 +145,7 @@ public class ConnectionManagementService {
             OperatorContext.getRole().orElse("SYSTEM"),
             "SUCCESS",
             "更新数据源连接",
-            buildConnectionAuditDetail(existing, connection, catalogs)
+            buildConnectionAuditDetail(existing, connection, normalizedCatalogs)
         ));
         return getConnection(id);
     }
@@ -203,13 +213,38 @@ public class ConnectionManagementService {
     }
 
     private void replaceCatalogs(Long connectionId, List<DSCatalog> catalogs, String operator) {
-        dsCatalogRepository.deleteByConnectionId(connectionId);
+        List<DSCatalog> existingCatalogs = dsCatalogRepository.findByConnectionId(connectionId);
+        Map<String, DSCatalog> existingByStableKey = new LinkedHashMap<>();
+        for (DSCatalog existing : existingCatalogs) {
+            existingByStableKey.put(buildCatalogStableKey(existing), existing);
+        }
+
+        Set<Long> retainedIds = new LinkedHashSet<>();
         for (DSCatalog catalog : catalogs) {
             catalog.setConnectionId(connectionId);
             catalog.setDeleted(false);
-            catalog.setCreatedBy(operator);
             catalog.setUpdatedBy(operator);
+            DSCatalog existing = existingByStableKey.get(buildCatalogStableKey(catalog));
+            if (existing != null) {
+                catalog.setId(existing.getId());
+                catalog.setCreatedBy(existing.getCreatedBy());
+                dsCatalogRepository.update(catalog);
+                retainedIds.add(existing.getId());
+                continue;
+            }
+            catalog.setCreatedBy(operator);
             dsCatalogRepository.insert(catalog);
+            retainedIds.add(catalog.getId());
+        }
+
+        for (DSCatalog existing : existingCatalogs) {
+            if (retainedIds.contains(existing.getId())) {
+                continue;
+            }
+            if (dsSourceRepository.countReferencesByCatalogId(existing.getId()) > 0) {
+                throw new ServiceConfigInvalidException("目标库已被服务引用，禁止删除: " + existing.getCatalogName());
+            }
+            dsCatalogRepository.markDeleted(existing.getId(), operator);
         }
     }
 
@@ -257,10 +292,47 @@ public class ConnectionManagementService {
         connection.setStatus(normalizeStatus(connection.getStatus()));
     }
 
-    private void validateCatalogs(List<DSCatalog> catalogs) {
+    private List<DSCatalog> normalizeCatalogs(String dbType, List<DSCatalog> catalogs) {
+        if (catalogs == null || catalogs.isEmpty()) {
+            return List.of();
+        }
+        List<DSCatalog> normalized = new ArrayList<>(catalogs.size());
+        String normalizedDbType = dbType == null ? null : dbType.trim().toUpperCase(Locale.ROOT);
+        for (DSCatalog catalog : catalogs) {
+            if (catalog == null) {
+                continue;
+            }
+            DSCatalog next = new DSCatalog();
+            next.setId(catalog.getId());
+            next.setConnectionId(catalog.getConnectionId());
+            next.setCatalogValue(trimToNull(catalog.getCatalogValue()));
+            next.setCatalogType(resolveCatalogType(normalizedDbType, catalog.getCatalogType()));
+            String normalizedValue = next.getCatalogValue();
+            next.setCatalogCode(trimToNull(catalog.getCatalogCode()));
+            if (next.getCatalogCode() == null && normalizedValue != null) {
+                next.setCatalogCode(generateCatalogCode(normalizedValue));
+            }
+            next.setCatalogName(trimToNull(catalog.getCatalogName()));
+            if (next.getCatalogName() == null) {
+                next.setCatalogName(normalizedValue);
+            }
+            next.setStatus(normalizeStatus(catalog.getStatus()));
+            next.setRemark(trimToNull(catalog.getRemark()));
+            next.setDeleted(catalog.getDeleted());
+            next.setCreatedAt(catalog.getCreatedAt());
+            next.setCreatedBy(catalog.getCreatedBy());
+            next.setUpdatedAt(catalog.getUpdatedAt());
+            next.setUpdatedBy(catalog.getUpdatedBy());
+            normalized.add(next);
+        }
+        return List.copyOf(normalized);
+    }
+
+    private void validateCatalogs(String dbType, List<DSCatalog> catalogs) {
         if (catalogs == null) {
             return;
         }
+        Set<String> stableKeys = new LinkedHashSet<>();
         for (DSCatalog catalog : catalogs) {
             if (isBlank(catalog.getCatalogCode())) {
                 throw new ParamInvalidException("catalogCode 不能为空");
@@ -274,8 +346,61 @@ public class ConnectionManagementService {
             if (isBlank(catalog.getCatalogValue())) {
                 throw new ParamInvalidException("catalogValue 不能为空");
             }
+            ensureCatalogTypeAllowed(dbType, catalog.getCatalogType());
             catalog.setStatus(normalizeStatus(catalog.getStatus()));
+            String stableKey = buildCatalogStableKey(catalog);
+            if (!stableKeys.add(stableKey)) {
+                throw new ParamInvalidException("目标库重复: " + catalog.getCatalogValue());
+            }
         }
+    }
+
+    private void ensureCatalogTypeAllowed(String dbType, String catalogType) {
+        String normalizedDbType = dbType == null ? null : dbType.trim().toUpperCase(Locale.ROOT);
+        String normalizedCatalogType = catalogType.trim().toUpperCase(Locale.ROOT);
+        if (Objects.equals(normalizedDbType, "POSTGRESQL") && !"SCHEMA".equals(normalizedCatalogType)) {
+            throw new ParamInvalidException("PostgreSQL 目标库类型仅支持 SCHEMA");
+        }
+        if (Objects.equals(normalizedDbType, "MYSQL") && !"DATABASE".equals(normalizedCatalogType)) {
+            throw new ParamInvalidException("MySQL 目标库类型仅支持 DATABASE");
+        }
+        if (Objects.equals(normalizedDbType, "ORACLE")
+            && !"DATABASE".equals(normalizedCatalogType)
+            && !"SCHEMA".equals(normalizedCatalogType)) {
+            throw new ParamInvalidException("Oracle 目标库类型仅支持 DATABASE 或 SCHEMA");
+        }
+    }
+
+    private String resolveCatalogType(String dbType, String catalogType) {
+        if (!isBlank(catalogType)) {
+            return catalogType.trim().toUpperCase(Locale.ROOT);
+        }
+        if (dbType == null) {
+            return null;
+        }
+        return switch (dbType) {
+            case "POSTGRESQL" -> "SCHEMA";
+            case "MYSQL", "ORACLE" -> "DATABASE";
+            default -> null;
+        };
+    }
+
+    private String generateCatalogCode(String catalogValue) {
+        String normalized = catalogValue.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "_");
+        normalized = normalized.replaceAll("^_+|_+$", "");
+        return normalized.isBlank() ? "catalog" : normalized;
+    }
+
+    private String buildCatalogStableKey(DSCatalog catalog) {
+        return catalog.getCatalogType().trim().toUpperCase(Locale.ROOT) + ":" + catalog.getCatalogValue().trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private String normalizeStatus(String status) {

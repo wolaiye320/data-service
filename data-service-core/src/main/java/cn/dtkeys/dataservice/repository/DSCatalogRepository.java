@@ -4,6 +4,7 @@ import cn.dtkeys.dataservice.datasource.model.DSCatalog;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
+import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Result;
 import org.apache.ibatis.annotations.Results;
 import org.apache.ibatis.annotations.Select;
@@ -64,6 +65,30 @@ public interface DSCatalogRepository {
         @Result(property = "updatedBy", column = "updated_by")
     })
     List<DSCatalog> findByConnectionId(Long connectionId);
+
+    @Update("""
+        update ds_catalog
+        set catalog_code = #{catalogCode},
+            catalog_name = #{catalogName},
+            catalog_type = #{catalogType},
+            catalog_value = #{catalogValue},
+            status = #{status},
+            remark = #{remark},
+            deleted = #{deleted},
+            updated_by = #{updatedBy},
+            updated_at = now()
+        where id = #{id}
+        """)
+    int update(DSCatalog catalog);
+
+    @Update("""
+        update ds_catalog
+        set deleted = true,
+            updated_by = #{operator},
+            updated_at = now()
+        where id = #{id}
+        """)
+    int markDeleted(@Param("id") Long id, @Param("operator") String operator);
 
     @Update("""
         delete from ds_catalog

@@ -26,7 +26,14 @@
       "Bash(git push:*)",
       "Bash(tail:*)",
       "Bash(./bin/git-step-all-auto.sh:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(git -C \"/Volumes/osdisk/java_code/data-service/.claude/worktrees/agent-a3539f2e\" diff --staged)",
+      "Bash(printf \"\\\\n---UNSTAGED---\\\\n\")",
+      "Bash(git -C \"/Volumes/osdisk/java_code/data-service/.claude/worktrees/agent-a3539f2e\" diff)",
+      "Bash(git -C \"/Volumes/osdisk/java_code/data-service/.claude/worktrees/agent-a3539f2e\" status --short)",
+      "Bash(printf \"\\\\n---RECENT---\\\\n\")",
+      "Bash(git -C \"/Volumes/osdisk/java_code/data-service/.claude/worktrees/agent-a3539f2e\" log --oneline -5)",
+      "Bash(./mvnw -pl data-service-core -Dtest=ConnectionManagementServiceTest,DatasourceConnectionManagerTest,SqlAutoDetectServiceTest test)"
     ]
   }
 }

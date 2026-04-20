@@ -48,6 +48,66 @@ const DB_TYPE_PORT: Record<string, number> = {
   ORACLE: 1521,
 }
 
+const CATALOG_RULES: Record<string, { defaultType: string; valueLabel: string; placeholder: string; emptyText: string }> = {
+  POSTGRESQL: {
+    defaultType: 'SCHEMA',
+    valueLabel: 'Schema 名称',
+    placeholder: '例如 public / analytics',
+    emptyText: 'PostgreSQL 默认按 Schema 管理目标库，可新增后填写 Schema 名称。',
+  },
+  MYSQL: {
+    defaultType: 'DATABASE',
+    valueLabel: 'Database 名称',
+    placeholder: '例如 crm / order_center',
+    emptyText: 'MySQL 默认按 Database 管理目标库，可新增后填写 Database 名称。',
+  },
+  ORACLE: {
+    defaultType: 'DATABASE',
+    valueLabel: '目标库值',
+    placeholder: '例如 serviceName 对应值',
+    emptyText: 'Oracle 暂保留兼容配置，可按需填写目标库值。',
+  },
+}
+
+function getCatalogRule(dbType?: string) {
+  return CATALOG_RULES[dbType ?? 'POSTGRESQL'] ?? CATALOG_RULES.POSTGRESQL
+}
+
+function buildCatalogDraft(dbType?: string): CatalogItem {
+  const rule = getCatalogRule(dbType)
+  return {
+    catalogCode: '',
+    catalogName: '',
+    catalogType: rule.defaultType,
+    catalogValue: '',
+    status: 'ENABLED',
+    remark: '',
+  }
+}
+
+function normalizeCatalogCode(value?: string) {
+  const normalized = (value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  return normalized || 'catalog'
+}
+
+function normalizeCatalogPayload(values: ConnectionUpsertPayload): ConnectionUpsertPayload {
+  const rule = getCatalogRule(values.dbType)
+  return {
+    ...values,
+    catalogs: (values.catalogs ?? []).map((catalog) => {
+      const catalogValue = catalog.catalogValue?.trim() ?? ''
+      return {
+        ...catalog,
+        catalogType: rule.defaultType,
+        catalogValue,
+        catalogCode: catalog.catalogCode?.trim() || normalizeCatalogCode(catalogValue),
+        catalogName: catalog.catalogName?.trim() || catalogValue,
+        status: catalog.status ?? 'ENABLED',
+      }
+    }),
+  }
+}
+
 function renderStatusText(status: string) {
   if (status === 'ENABLED') {
     return <span className="status-text-success">已启用</span>
@@ -210,16 +270,17 @@ export function DatasourceModulePage() {
   async function handleSubmit(values: ConnectionUpsertPayload) {
     setSaving(true)
     try {
+      const payload = normalizeCatalogPayload(values)
       if (editingConnection?.id) {
         await putJson<ConnectionDetail, ConnectionUpsertPayload>(
           `/api/admin/connections/${editingConnection.id}`,
-          values,
+          payload,
         )
         message.success('连接已更新')
         await loadConnections(editingConnection.id)
         await loadDetail(editingConnection.id)
       } else {
-        const response = await postJson<ConnectionDetail, ConnectionUpsertPayload>('/api/admin/connections', values)
+        const response = await postJson<ConnectionDetail, ConnectionUpsertPayload>('/api/admin/connections', payload)
         message.success('连接已创建')
         await loadConnections(response.data.connection.id ?? null)
       }
@@ -275,19 +336,23 @@ export function DatasourceModulePage() {
       </div>
 
       <div className="datasource-workspace">
-        <Card title="连接列表" className="li-page-main-card datasource-list-card" data-testid="datasource-list-card">
+        <Card className="li-page-main-card datasource-list-card" data-testid="datasource-list-card" styles={{ body: { padding: 0 } }}>
           {loading ? (
-            <Spin />
+            <div style={{ padding: 24 }}>
+              <Spin />
+            </div>
           ) : (
-            <Table
-              rowKey={(record) => String(record.id)}
-              columns={columns}
-              dataSource={connections}
-              pagination={false}
-              size="small"
-              scroll={{ x: 760 }}
-              rowClassName={(record) => (record.id === selectedId ? 'li-table-row-selected' : '')}
-            />
+            <div className="datasource-list-table-wrapper">
+              <Table
+                rowKey={(record) => String(record.id)}
+                columns={columns}
+                dataSource={connections}
+                pagination={false}
+                size="small"
+                scroll={{ x: 760 }}
+                rowClassName={(record) => (record.id === selectedId ? 'li-table-row-selected' : '')}
+              />
+            </div>
           )}
         </Card>
       </div>
@@ -380,7 +445,17 @@ export function DatasourceModulePage() {
                   { label: 'MySQL', value: 'MYSQL' },
                   { label: 'Oracle', value: 'ORACLE' },
                 ]}
-                onChange={(value) => form.setFieldValue('port', DB_TYPE_PORT[value])}
+                onChange={(value) => {
+                  form.setFieldValue('port', DB_TYPE_PORT[value])
+                  const catalogs = form.getFieldValue('catalogs') ?? []
+                  form.setFieldValue(
+                    'catalogs',
+                    catalogs.map((catalog: CatalogItem) => ({
+                      ...catalog,
+                      catalogType: getCatalogRule(value).defaultType,
+                    })),
+                  )
+                }}
               />
             </Form.Item>
             <Form.Item label="状态" name="status">
@@ -419,75 +494,72 @@ export function DatasourceModulePage() {
 
           <Form.List name="catalogs">
             {(fields, { add, remove }) => (
-              <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                <div className="section-header">
-                  <Typography.Title level={5}>目标库</Typography.Title>
-                  <Button
-                    size="small"
-                    onClick={() =>
-                      add({
-                        catalogCode: '',
-                        catalogName: '',
-                        catalogType: 'SCHEMA',
-                        catalogValue: '',
-                        status: 'ENABLED',
-                        remark: '',
-                      })
-                    }
-                  >
-                    新增目标库
-                  </Button>
-                </div>
-                {fields.length === 0 ? <Alert type="info" showIcon message="当前未配置目标库，可按需新增。" /> : null}
-                {fields.map((field) => (
-                  <Card
-                    key={field.key}
-                    size="small"
-                    title={`目标库 #${field.name + 1}`}
-                    extra={
-                      <ActionIconButton
-                        icon={<DeleteOutlined />}
-                        label={`删除目标库 ${field.name + 1}`}
-                        danger
-                        onClick={() => remove(field.name)}
-                      />
-                    }
-                  >
-                    <div className="form-grid form-grid-three">
-                      <Form.Item label="编码" name={[field.name, 'catalogCode']} rules={[{ required: true }]}>
-                        <Input size="small" />
-                      </Form.Item>
-                      <Form.Item label="名称" name={[field.name, 'catalogName']} rules={[{ required: true }]}>
-                        <Input size="small" />
-                      </Form.Item>
-                      <Form.Item label="类型" name={[field.name, 'catalogType']} rules={[{ required: true }]}>
-                        <Select
+              <Form.Item noStyle shouldUpdate={(prev, next) => prev.dbType !== next.dbType}>
+                {() => {
+                  const rule = getCatalogRule(form.getFieldValue('dbType'))
+                  return (
+                    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                      <div className="section-header">
+                        <Typography.Title level={5}>目标库</Typography.Title>
+                        <Button size="small" onClick={() => add(buildCatalogDraft(form.getFieldValue('dbType')))}>
+                          新增目标库
+                        </Button>
+                      </div>
+                      {fields.length === 0 ? <Alert type="info" showIcon message={rule.emptyText} /> : null}
+                      {fields.map((field) => (
+                        <Card
+                          key={field.key}
                           size="small"
-                          options={[
-                            { label: 'Schema', value: 'SCHEMA' },
-                            { label: 'Database', value: 'DATABASE' },
-                          ]}
-                        />
-                      </Form.Item>
-                      <Form.Item label="值" name={[field.name, 'catalogValue']} rules={[{ required: true }]}>
-                        <Input size="small" />
-                      </Form.Item>
-                      <Form.Item label="状态" name={[field.name, 'status']}>
-                        <Select
-                          size="small"
-                          options={[
-                            { label: '已启用', value: 'ENABLED' },
-                            { label: '已停用', value: 'DISABLED' },
-                          ]}
-                        />
-                      </Form.Item>
-                      <Form.Item label="备注" name={[field.name, 'remark']}>
-                        <Input size="small" />
-                      </Form.Item>
-                    </div>
-                  </Card>
-                ))}
-              </Space>
+                          title={`目标库 #${field.name + 1}`}
+                          extra={
+                            <ActionIconButton
+                              icon={<DeleteOutlined />}
+                              label={`删除目标库 ${field.name + 1}`}
+                              danger
+                              onClick={() => remove(field.name)}
+                            />
+                          }
+                        >
+                          <div className="form-grid form-grid-two">
+                            <Form.Item
+                              label={rule.valueLabel}
+                              name={[field.name, 'catalogValue']}
+                              rules={[{ required: true, message: `请输入${rule.valueLabel}` }]}
+                            >
+                              <Input size="small" placeholder={rule.placeholder} />
+                            </Form.Item>
+                            <Form.Item label="状态" name={[field.name, 'status']}>
+                              <Select
+                                size="small"
+                                options={[
+                                  { label: '已启用', value: 'ENABLED' },
+                                  { label: '已停用', value: 'DISABLED' },
+                                ]}
+                              />
+                            </Form.Item>
+                            <Form.Item noStyle shouldUpdate>
+                              {() => {
+                                const catalogValue = form.getFieldValue(['catalogs', field.name, 'catalogValue'])
+                                const catalogCode = normalizeCatalogCode(catalogValue)
+                                return (
+                                  <Alert
+                                    type="info"
+                                    showIcon
+                                    message={`将自动生成编码 ${catalogCode}，类型 ${rule.defaultType}`}
+                                  />
+                                )
+                              }}
+                            </Form.Item>
+                            <Form.Item label="备注" name={[field.name, 'remark']}>
+                              <Input size="small" />
+                            </Form.Item>
+                          </div>
+                        </Card>
+                      ))}
+                    </Space>
+                  )
+                }}
+              </Form.Item>
             )}
           </Form.List>
         </Form>

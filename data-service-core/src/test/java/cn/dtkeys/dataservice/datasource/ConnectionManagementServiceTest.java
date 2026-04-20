@@ -1,11 +1,12 @@
 package cn.dtkeys.dataservice.datasource;
 
 import cn.dtkeys.dataservice.common.context.OperatorContext;
+import cn.dtkeys.dataservice.common.exception.ParamInvalidException;
 import cn.dtkeys.dataservice.common.exception.ServiceConfigInvalidException;
+import cn.dtkeys.dataservice.datasource.model.DSCatalog;
 import cn.dtkeys.dataservice.datasource.model.DSConnection;
 import cn.dtkeys.dataservice.datasource.model.DSSourceCapability;
 import cn.dtkeys.dataservice.audit.AuditLogService;
-import cn.dtkeys.dataservice.datasource.DatasourceConnectionManager;
 import cn.dtkeys.dataservice.repository.DSCatalogRepository;
 import cn.dtkeys.dataservice.repository.DSConnectionRepository;
 import cn.dtkeys.dataservice.repository.DSSourceCapabilityRepository;
@@ -18,9 +19,15 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +50,12 @@ class ConnectionManagementServiceTest {
     private DatasourceConnectionManager datasourceConnectionManager;
 
     @Mock
+    private DataSource dataSource;
+
+    @Mock
+    private Connection sqlConnection;
+
+    @Mock
     private AuditLogService auditLogService;
 
     @InjectMocks
@@ -51,6 +64,11 @@ class ConnectionManagementServiceTest {
     @AfterEach
     void tearDown() {
         OperatorContext.clear();
+    }
+
+    private void mockSuccessfulConnection() throws Exception {
+        when(dataSource.getConnection()).thenReturn(sqlConnection);
+        when(datasourceConnectionManager.createDirectDataSource(any(), any())).thenReturn(dataSource);
     }
 
     @Test
@@ -117,6 +135,89 @@ class ConnectionManagementServiceTest {
         assertThat(detail.capabilities().get(0).getCapabilityCode()).isEqualTo("JOIN_INNER");
     }
 
+    @Test
+    void shouldNormalizeCatalogDefaultsWhenCreatingConnection() throws Exception {
+        OperatorContext.setOperator("admin-a");
+        DSConnection connection = buildConnection(null, "pg_conn", "ENABLED");
+        DSCatalog catalog = new DSCatalog();
+        catalog.setCatalogValue(" analytics ");
+        when(dsConnectionRepository.findByCode("pg_conn")).thenReturn(null).thenReturn(buildConnection(100L, "pg_conn", "ENABLED"));
+        mockSuccessfulConnection();
+        when(dsConnectionRepository.findById(100L)).thenReturn(buildConnection(100L, "pg_conn", "ENABLED"));
+        when(dsCatalogRepository.findByConnectionId(100L)).thenReturn(List.of());
+        when(dsSourceCapabilityRepository.findByConnectionId(100L)).thenReturn(List.of());
+
+        connectionManagementService.createConnection(connection, List.of(catalog));
+
+        ArgumentCaptor<DSCatalog> catalogCaptor = ArgumentCaptor.forClass(DSCatalog.class);
+        verify(dsCatalogRepository).insert(catalogCaptor.capture());
+        assertThat(catalogCaptor.getValue().getCatalogType()).isEqualTo("SCHEMA");
+        assertThat(catalogCaptor.getValue().getCatalogCode()).isEqualTo("analytics");
+        assertThat(catalogCaptor.getValue().getCatalogName()).isEqualTo("analytics");
+        assertThat(catalogCaptor.getValue().getStatus()).isEqualTo("ENABLED");
+    }
+
+    @Test
+    void shouldRejectMysqlSchemaCatalogType() throws Exception {
+        DSConnection connection = buildConnection(null, "mysql_conn", "ENABLED");
+        connection.setDbType("MYSQL");
+        DSCatalog catalog = new DSCatalog();
+        catalog.setCatalogType("SCHEMA");
+        catalog.setCatalogCode("crm");
+        catalog.setCatalogName("crm");
+        catalog.setCatalogValue("crm");
+        when(dsConnectionRepository.findById(7L)).thenReturn(buildConnection(7L, "mysql_conn", "ENABLED"));
+
+        assertThatThrownBy(() -> connectionManagementService.updateConnection(7L, connection, List.of(catalog)))
+            .isInstanceOf(ParamInvalidException.class)
+            .hasMessage("MySQL 目标库类型仅支持 DATABASE");
+    }
+
+    @Test
+    void shouldRejectDeletingReferencedCatalog() throws Exception {
+        OperatorContext.setOperator("admin-a");
+        DSConnection existing = buildConnection(7L, "pg_conn", "ENABLED");
+        DSCatalog existingCatalog = buildCatalog(11L, "SCHEMA", "analytics");
+        existingCatalog.setCatalogName("analytics");
+        DSConnection update = buildConnection(null, "pg_conn", "ENABLED");
+        when(dsConnectionRepository.findById(7L)).thenReturn(existing);
+        when(dsConnectionRepository.findByCode("pg_conn")).thenReturn(existing);
+        mockSuccessfulConnection();
+        when(dsCatalogRepository.findByConnectionId(7L)).thenReturn(List.of(existingCatalog));
+        when(dsSourceRepository.countReferencesByCatalogId(11L)).thenReturn(1L);
+
+        assertThatThrownBy(() -> connectionManagementService.updateConnection(7L, update, List.of()))
+            .isInstanceOf(ServiceConfigInvalidException.class)
+            .hasMessage("目标库已被服务引用，禁止删除: analytics");
+    }
+
+    @Test
+    void shouldReuseCatalogIdWhenStableKeyUnchanged() throws Exception {
+        OperatorContext.setOperator("admin-a");
+        DSConnection existing = buildConnection(7L, "pg_conn", "ENABLED");
+        DSCatalog existingCatalog = buildCatalog(11L, "SCHEMA", "analytics");
+        existingCatalog.setCatalogCode("analytics");
+        existingCatalog.setCatalogName("analytics");
+        DSConnection update = buildConnection(null, "pg_conn", "ENABLED");
+        DSCatalog catalog = new DSCatalog();
+        catalog.setCatalogValue("analytics");
+        catalog.setRemark("new remark");
+        when(dsConnectionRepository.findById(7L)).thenReturn(existing);
+        when(dsConnectionRepository.findByCode("pg_conn")).thenReturn(existing);
+        mockSuccessfulConnection();
+        when(dsCatalogRepository.findByConnectionId(7L)).thenReturn(List.of(existingCatalog));
+        when(dsSourceCapabilityRepository.findByConnectionId(7L)).thenReturn(List.of());
+
+        connectionManagementService.updateConnection(7L, update, List.of(catalog));
+
+        ArgumentCaptor<DSCatalog> catalogCaptor = ArgumentCaptor.forClass(DSCatalog.class);
+        verify(dsCatalogRepository).update(catalogCaptor.capture());
+        assertThat(catalogCaptor.getValue().getId()).isEqualTo(11L);
+        assertThat(catalogCaptor.getValue().getRemark()).isEqualTo("new remark");
+        verify(dsCatalogRepository, never()).insert(any());
+        verify(dsCatalogRepository, never()).markDeleted(any(), any());
+    }
+
     private DSConnection buildConnection(Long id, String code, String status) {
         DSConnection connection = new DSConnection();
         connection.setId(id);
@@ -132,5 +233,16 @@ class ConnectionManagementServiceTest {
         connection.setCreatedBy("tester");
         connection.setUpdatedBy("tester");
         return connection;
+    }
+
+    private DSCatalog buildCatalog(Long id, String catalogType, String catalogValue) {
+        DSCatalog catalog = new DSCatalog();
+        catalog.setId(id);
+        catalog.setCatalogType(catalogType);
+        catalog.setCatalogValue(catalogValue);
+        catalog.setStatus("ENABLED");
+        catalog.setCreatedBy("tester");
+        catalog.setUpdatedBy("tester");
+        return catalog;
     }
 }

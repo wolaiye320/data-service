@@ -11,6 +11,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
   Pagination,
   Select,
   Space,
@@ -22,6 +23,7 @@ import {
 } from 'antd'
 import {
   EditOutlined,
+  EyeOutlined,
   RocketOutlined,
   StopOutlined,
   DeleteOutlined,
@@ -40,7 +42,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import { ActionIconButton } from '../../components/ActionIconButton'
 import { useAppFeedback } from '../../components/useAppFeedback'
-import { deleteJson, getJson, postJson, putJson, resolveErrorMessage } from '../../services/http'
+import { getJson, postJson, putJson, resolveErrorMessage } from '../../services/http'
 import type {
   CatalogItem,
   ConnectionItem,
@@ -104,6 +106,10 @@ type PreviewResult = {
 type CapabilityRow = SourceCapabilityItem & {
   connectionCode: string
   connectionName: string
+}
+
+function renderCatalogLabel(catalog: CatalogItem) {
+  return `${catalog.catalogName} (${catalog.catalogValue})`
 }
 
 function renderServiceStatusText(status: string) {
@@ -415,6 +421,7 @@ export default function ServiceModulePage() {
   const [previewExecuting, setPreviewExecuting] = useState(false)
   const [detectingSql, setDetectingSql] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
   const [definitions, setDefinitions] = useState<ServiceDefinition[]>([])
   const [searchKeyword, setSearchKeyword] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
@@ -435,8 +442,11 @@ export default function ServiceModulePage() {
   const [previewForm] = Form.useForm<PreviewForm>()
 
   async function ensureConnectionCatalogs(connectionId?: number) {
-    if (!connectionId || connectionCatalogs[connectionId]) {
-      return
+    if (!connectionId) {
+      return []
+    }
+    if (connectionCatalogs[connectionId]) {
+      return connectionCatalogs[connectionId]
     }
     try {
       const response = await getJson<ConnectionDetail>(`/api/admin/connections/${connectionId}`)
@@ -444,9 +454,19 @@ export default function ServiceModulePage() {
         ...current,
         [connectionId]: response.data.catalogs,
       }))
+      return response.data.catalogs
     } catch (err) {
       message.error(resolveErrorMessage(err))
+      return []
     }
+  }
+
+  async function handleSourceConnectionChange(connectionId?: number, sourceIndex?: number) {
+    if (sourceIndex === undefined) {
+      return
+    }
+    const catalogs = await ensureConnectionCatalogs(connectionId)
+    form.setFieldValue(['sources', sourceIndex, 'catalogId'], catalogs.length === 1 ? catalogs[0]?.id : undefined)
   }
 
   async function loadDefinitions(nextSelectedId?: number | null) {
@@ -460,7 +480,7 @@ export default function ServiceModulePage() {
       setDefinitions(nextDefinitions)
       setConnections(connectionResponse.data)
       const effectiveId =
-        nextSelectedId ?? (selectedId && nextDefinitions.some((item) => item.id === selectedId) ? selectedId : nextDefinitions[0]?.id)
+        nextSelectedId ?? (selectedId && nextDefinitions.some((item) => item.id === selectedId) ? selectedId : null)
       setSelectedId(effectiveId ?? null)
     } finally {
       setLoading(false)
@@ -506,11 +526,20 @@ export default function ServiceModulePage() {
   }, [])
 
   useEffect(() => {
-    if (selectedId) {
+    if (detailOpen && selectedId) {
       void loadWorkspace(selectedId)
+      return
+    }
+    if (!detailOpen) {
+      setDetail(null)
+      setVersions([])
+      setMetadata(null)
+      setCapabilities({})
+      setPreviewResult(null)
+      setPreviewError(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId])
+  }, [detailOpen, selectedId])
 
   const capabilityRows = useMemo<CapabilityRow[]>(() => {
     const connectionMap = new Map(connections.map((item) => [item.id, item]))
@@ -543,13 +572,73 @@ export default function ServiceModulePage() {
 
   const previewColumns = useMemo(() => buildPreviewColumns(previewResult?.rows ?? []), [previewResult])
 
-  async function openDetail(id: number | null) {
-    if (!id) {
-      return
-    }
-    setSelectedId(id)
-    await loadWorkspace(id)
-  }
+  const listColumns = useMemo<ColumnsType<ServiceDefinition>>(
+    () => [
+      {
+        title: '服务编码',
+        dataIndex: 'serviceCode',
+        key: 'serviceCode',
+        render: (value: string) => <Typography.Text code>{value}</Typography.Text>,
+      },
+      {
+        title: '服务名称',
+        dataIndex: 'serviceName',
+        key: 'serviceName',
+      },
+      {
+        title: '类型',
+        key: 'serviceType',
+        render: (_, record) => (isFederatedDefinition(record) ? '联邦服务' : '本地服务'),
+      },
+      {
+        title: '状态',
+        dataIndex: 'status',
+        key: 'status',
+        render: (value: string) => renderServiceStatusText(value),
+      },
+      {
+        title: '操作',
+        key: 'actions',
+        width: 180,
+        render: (_, record) => (
+          <Space size={4} onClick={(event) => event.stopPropagation()}>
+            <ActionIconButton
+              icon={<EyeOutlined />}
+              label={`查看 ${record.serviceCode}`}
+              onClick={() => {
+                if (record.id) {
+                  setSelectedId(record.id)
+                  setDetailOpen(true)
+                }
+              }}
+            />
+            <ActionIconButton
+              icon={<EditOutlined />}
+              label={`编辑 ${record.serviceCode}`}
+              onClick={() => void openEdit(record.id ?? null)}
+            />
+            {record.status === 'DRAFT' ? (
+              <ActionIconButton
+                icon={<RocketOutlined />}
+                label={`发布 ${record.serviceCode}`}
+                loading={actionLoading === record.id}
+                onClick={() => void handlePublish(record.id)}
+              />
+            ) : null}
+            {record.status === 'PUBLISHED' ? (
+              <ActionIconButton
+                icon={<StopOutlined />}
+                label={`停用 ${record.serviceCode}`}
+                confirmTitle="确认停用该服务？"
+                onClick={() => void handleDisable(record.id)}
+              />
+            ) : null}
+          </Space>
+        ),
+      },
+    ],
+    [actionLoading],
+  )
 
   async function openEdit(id: number | null) {
     if (!id) {
@@ -615,7 +704,7 @@ export default function ServiceModulePage() {
   }
 
   function applyAutoDetectResult(result: SqlAutoDetectResponse, sqlText: string) {
-      const nextValues: Partial<ServiceDefinitionUpsertPayload> = {
+    const nextValues: Partial<ServiceDefinitionUpsertPayload> = {
       sqlType: result.sqlType,
       serviceType: result.serviceType,
       sqlTemplate: sqlText,
@@ -704,19 +793,6 @@ export default function ServiceModulePage() {
     }
   }
 
-  async function handleDelete(id?: number) {
-    if (!id) {
-      return
-    }
-    try {
-      await deleteJson(`/api/admin/service-definitions/${id}`)
-      message.success('服务已删除')
-      await loadDefinitions()
-    } catch (err) {
-      message.error(resolveErrorMessage(err))
-    }
-  }
-
   async function handlePublish(id?: number) {
     if (!id) {
       return
@@ -799,126 +875,89 @@ export default function ServiceModulePage() {
       <div className="module-hero">
         <div>
           <Typography.Title level={5} style={{ margin: 0 }}>数据服务</Typography.Title>
-          <Typography.Text type="secondary" style={{ fontSize: 13 }}>管理和配置联邦数据查询服务</Typography.Text>
         </div>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={() => void loadDefinitions(selectedId)}>
-            刷新工作区
-          </Button>
+        <div className="service-title-actions">
+          <Input
+            placeholder="搜索服务..."
+            prefix={<SearchOutlined />}
+            value={searchKeyword}
+            onChange={(e) => {
+              setSearchKeyword(e.target.value)
+              setCurrentPage(1)
+            }}
+            allowClear
+          />
           <Button type="primary" icon={<PlusOutlined />} onClick={() => void openEdit(null)}>
             新建服务
           </Button>
-        </Space>
+        </div>
       </div>
 
-      <div className="federation-layout-v1">
-        {/* 左侧服务列表 */}
-        <div className="service-list-sidebar-v1">
-          <div className="service-list-title-row-v1">
-            <span className="service-list-title-text-v1">服务列表</span>
-          </div>
-          <div className="service-list-search-v1">
-            <Input
-              placeholder="搜索服务..."
-              prefix={<SearchOutlined />}
-              value={searchKeyword}
-              onChange={(e) => {
-                setSearchKeyword(e.target.value)
-                setCurrentPage(1)
-              }}
-              allowClear
-            />
-          </div>
-          <div className="service-list-items-v1">
-            {loading ? (
-              <div style={{ padding: 24, textAlign: 'center' }}>
-                <Spin />
-              </div>
-            ) : filteredDefinitions.length === 0 ? (
-              <Empty description={definitions.length === 0 ? "还没有数据服务" : "未找到匹配的服务"} style={{ marginTop: 40 }} />
-            ) : (
-              paginatedDefinitions.map((item) => (
-                <div
-                  key={item.id}
-                  className={`service-list-item-v1 ${item.id === selectedId ? 'active' : ''}`}
-                  onClick={() => item.id && setSelectedId(item.id)}
-                >
-                  <div className="service-list-item-header-v1">
-                    <Tag color={isFederatedDefinition(item) ? 'blue' : 'green'}>
-                      {isFederatedDefinition(item) ? '联邦服务' : '本地服务'}
-                    </Tag>
-                    <span className={`service-status-text ${item.status?.toLowerCase()}`}>
-                      {item.status === 'PUBLISHED' ? '已发布' : '草稿'}
-                    </span>
-                  </div>
-                  <div className="service-list-item-title-v1">{item.serviceName}</div>
-                  <div className="service-list-item-code-v1">{item.serviceCode}</div>
-                  <div className="service-list-item-actions-v1" onClick={(e) => e.stopPropagation()}>
-                    <ActionIconButton
-                      icon={<EditOutlined />}
-                      label={`编辑 ${item.serviceCode}`}
-                      onClick={() => void openEdit(item.id ?? null)}
-                    />
-                    {item.status === 'DRAFT' ? (
-                      <ActionIconButton
-                        icon={<RocketOutlined />}
-                        label={`发布 ${item.serviceCode}`}
-                        loading={actionLoading === item.id}
-                        onClick={() => void handlePublish(item.id)}
-                      />
-                    ) : null}
-                    {item.status === 'PUBLISHED' ? (
-                      <ActionIconButton
-                        icon={<StopOutlined />}
-                        label={`停用 ${item.serviceCode}`}
-                        confirmTitle="确认停用该服务？"
-                        onClick={() => void handleDisable(item.id)}
-                      />
-                    ) : null}
-                    {item.status !== 'PUBLISHED' ? (
-                      <ActionIconButton
-                        icon={<DeleteOutlined />}
-                        label={`删除 ${item.serviceCode}`}
-                        danger
-                        confirmTitle="确认删除该服务？"
-                        onClick={() => void handleDelete(item.id)}
-                      />
-                    ) : null}
-                  </div>
+      <div className="datasource-workspace service-workspace">
+        <Card className="li-page-main-card service-list-card" data-testid="service-list-card" styles={{ body: { padding: 0 } }}>
+          <div className="service-list-panel">
+            <div className="service-list-panel-body">
+              {loading ? (
+                <div className="service-list-panel-empty">
+                  <Spin />
                 </div>
-              ))
-            )}
+              ) : filteredDefinitions.length === 0 ? (
+                <div className="service-list-panel-empty">
+                  <Empty description={definitions.length === 0 ? '还没有数据服务' : '未找到匹配的服务'} />
+                </div>
+              ) : (
+                <>
+                  <div className="service-list-table-wrapper">
+                    <Table<ServiceDefinition>
+                      rowKey={(record) => String(record.id)}
+                      columns={listColumns}
+                      dataSource={paginatedDefinitions}
+                      pagination={false}
+                      size="small"
+                      scroll={{ x: 760 }}
+                      rowClassName={() => 'service-list-row'}
+                    />
+                  </div>
+                  <div className="service-list-pagination-bar">
+                    <Pagination
+                      current={currentPage}
+                      pageSize={pageSize}
+                      total={filteredDefinitions.length}
+                      onChange={(page, size) => {
+                        setCurrentPage(page)
+                        if (size && size !== pageSize) {
+                          setPageSize(size)
+                        }
+                      }}
+                      showSizeChanger
+                      pageSizeOptions={[5, 10, 20, 50]}
+                      size="small"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-          {!loading && filteredDefinitions.length > 0 && (
-            <div className="service-list-pagination-v1">
-              <Pagination
-                current={currentPage}
-                pageSize={pageSize}
-                total={filteredDefinitions.length}
-                onChange={(page, size) => {
-                  setCurrentPage(page)
-                  if (size && size !== pageSize) {
-                    setPageSize(size)
-                  }
-                }}
-                showSizeChanger
-                pageSizeOptions={[5, 10, 20, 50]}
-                size="small"
-              />
-            </div>
-          )}
-        </div>
+        </Card>
+      </div>
 
-        {/* 右侧详情区 */}
-        <div className="service-detail-container-v1">
-          {workspaceLoading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-              <Spin size="large" />
-            </div>
-          ) : !detail ? (
-            <Empty description="请选择一个数据服务查看详情" style={{ marginTop: 100 }} />
-          ) : (
-            <div className="detail-content-v1">
+      <Modal
+        title={detail ? `服务详情 · ${detail.definition.serviceCode}` : '服务详情'}
+        width={1200}
+        open={detailOpen}
+        onCancel={() => setDetailOpen(false)}
+        footer={null}
+        destroyOnHidden
+        styles={{ body: { maxHeight: '75vh', overflow: 'auto', padding: 24 } }}
+      >
+        {workspaceLoading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 320 }}>
+            <Spin size="large" />
+          </div>
+        ) : !detail ? (
+          <Empty description="请选择一个数据服务查看详情" style={{ marginTop: 80 }} />
+        ) : (
+          <div className="detail-content-v1">
               {/* 服务概览卡片 */}
               <Card
                 className="overview-card-v1"
@@ -946,7 +985,11 @@ export default function ServiceModulePage() {
                       <label>状态</label>
                       <span className="flex items-center gap-2">
                         <span className={`status-dot ${detail.definition.status?.toLowerCase()}`} />
-                        {detail.definition.status === 'PUBLISHED' ? '已发布' : '草稿'}
+                        {detail.definition.status === 'PUBLISHED'
+                          ? '已发布'
+                          : detail.definition.status === 'DISABLED'
+                            ? '已停用'
+                            : '草稿'}
                       </span>
                     </div>
                     <div className="overview-item-v1">
@@ -1216,8 +1259,7 @@ export default function ServiceModulePage() {
               )}
             </div>
           )}
-        </div>
-      </div>
+      </Modal>
 
       <Drawer
         title={editingDefinition ? `编辑服务 · ${editingDefinition.serviceCode}` : '新建服务'}
@@ -1304,7 +1346,7 @@ export default function ServiceModulePage() {
                                   }
                                 }}
                                 options={catalogs.map((catalog) => ({
-                                  label: `${catalog.catalogName} (${catalog.catalogValue})`,
+                                  label: renderCatalogLabel(catalog),
                                   value: catalog.id,
                                 }))}
                               />
@@ -1408,10 +1450,35 @@ WHERE 1 = 1
                             label: `${c.connectionName} (${c.connectionCode})`,
                             value: c.id,
                           }))}
+                          onChange={(value) => {
+                            void handleSourceConnectionChange(value, field.name)
+                          }}
                         />
                       </Form.Item>
-                      <Form.Item label="catalogId" name={[field.name, 'catalogId']}>
-                        <InputNumber size="small" style={{ width: '100%' }} min={1} />
+                      <Form.Item noStyle shouldUpdate>
+                        {() => {
+                          const connectionId = form.getFieldValue(['sources', field.name, 'connectionId'])
+                          const catalogs = connectionId ? connectionCatalogs[connectionId] ?? [] : []
+                          return (
+                            <Form.Item label="目标库" name={[field.name, 'catalogId']}>
+                              <Select
+                                size="small"
+                                allowClear
+                                disabled={!connectionId}
+                                placeholder={connectionId ? '请选择目标库' : '请先选择连接'}
+                                onDropdownVisibleChange={(open) => {
+                                  if (open) {
+                                    void ensureConnectionCatalogs(connectionId)
+                                  }
+                                }}
+                                options={catalogs.map((catalog) => ({
+                                  label: renderCatalogLabel(catalog),
+                                  value: catalog.id,
+                                }))}
+                              />
+                            </Form.Item>
+                          )
+                        }}
                       </Form.Item>
                       <Form.Item label="别名" name={[field.name, 'sourceAlias']} rules={[{ required: true }]}>
                         <Input size="small" />

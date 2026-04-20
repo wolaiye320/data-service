@@ -66,4 +66,12 @@ public interface DSSourceRepository {
           and svc.status = 'PUBLISHED'
         """)
     long countPublishedReferencesByConnectionId(Long connectionId);
+
+    @Select("""
+        select count(1)
+        from ds_source
+        where catalog_id = #{catalogId}
+          and deleted = false
+        """)
+    long countReferencesByCatalogId(Long catalogId);
 }
