@@ -17,10 +17,10 @@ public interface DSParamRepository {
     @Insert("""
         insert into ds_param (
             service_id, param_name, display_name, param_type, sql_placeholder, required, default_value,
-            sort_order, remark, deleted, created_by, updated_by
+            sort_order, deleted, created_by, updated_by
         ) values (
             #{serviceId}, #{paramName}, #{displayName}, #{paramType}, #{sqlPlaceholder}, #{required},
-            #{defaultValue}, #{sortOrder}, #{remark}, #{deleted}, #{createdBy}, #{updatedBy}
+            #{defaultValue}, #{sortOrder}, #{deleted}, #{createdBy}, #{updatedBy}
         )
         """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
@@ -28,7 +28,7 @@ public interface DSParamRepository {
 
     @Select("""
         select id, service_id, param_name, display_name, param_type, sql_placeholder, required, default_value,
-               sort_order, remark, deleted, created_at, created_by, updated_at, updated_by
+               sort_order, deleted, created_at, created_by, updated_at, updated_by
         from ds_param
         where service_id = #{serviceId} and deleted = false
         order by sort_order, id

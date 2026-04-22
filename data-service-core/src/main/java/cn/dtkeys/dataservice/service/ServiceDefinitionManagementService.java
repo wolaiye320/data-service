@@ -418,9 +418,6 @@ public class ServiceDefinitionManagementService {
         if (isBlank(source.getSourceValue())) {
             throw new ParamInvalidException("sourceValue 不能为空");
         }
-        if (isBlank(source.getStatus())) {
-            source.setStatus("ENABLED");
-        }
     }
 
     private void validateParam(DSParam param) {

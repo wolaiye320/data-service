@@ -109,7 +109,7 @@ type CapabilityRow = SourceCapabilityItem & {
 }
 
 function renderCatalogLabel(catalog: CatalogItem) {
-  return `${catalog.catalogName} (${catalog.catalogValue})`
+  return catalog.catalogValue
 }
 
 function renderServiceStatusText(status: string) {
@@ -604,7 +604,7 @@ export default function ServiceModulePage() {
           <Space size={4} onClick={(event) => event.stopPropagation()}>
             <ActionIconButton
               icon={<EyeOutlined />}
-              label={`查看 ${record.serviceCode}`}
+              label="查看服务详情"
               onClick={() => {
                 if (record.id) {
                   setSelectedId(record.id)
@@ -614,13 +614,13 @@ export default function ServiceModulePage() {
             />
             <ActionIconButton
               icon={<EditOutlined />}
-              label={`编辑 ${record.serviceCode}`}
+              label="编辑服务"
               onClick={() => void openEdit(record.id ?? null)}
             />
             {record.status === 'DRAFT' ? (
               <ActionIconButton
                 icon={<RocketOutlined />}
-                label={`发布 ${record.serviceCode}`}
+                label="发布服务"
                 loading={actionLoading === record.id}
                 onClick={() => void handlePublish(record.id)}
               />
@@ -628,7 +628,7 @@ export default function ServiceModulePage() {
             {record.status === 'PUBLISHED' ? (
               <ActionIconButton
                 icon={<StopOutlined />}
-                label={`停用 ${record.serviceCode}`}
+                label="停用服务"
                 confirmTitle="确认停用该服务？"
                 onClick={() => void handleDisable(record.id)}
               />
@@ -716,11 +716,6 @@ export default function ServiceModulePage() {
         sourceValue: item.sourceValue,
         joinKey: result.fields.find((field) => field.sourceAlias === item.sourceAlias && field.joinKey)?.sourceColumn ?? '',
         configJson: '',
-        status: 'ENABLED',
-        remark:
-          item.connectionResolved && item.catalogResolved
-            ? ''
-            : '该来源仅完成 SQL 识别，请补充连接或目录',
       })),
       params: result.params.map((item) => ({
         paramName: item.paramName,
@@ -730,7 +725,6 @@ export default function ServiceModulePage() {
         required: item.required,
         defaultValue: '',
         sortOrder: item.sortOrder,
-        remark: '',
       })),
       fields: result.fields.map((item) => ({
         sourceAlias: item.sourceAlias ?? '',
@@ -741,7 +735,6 @@ export default function ServiceModulePage() {
         sortOrder: item.sortOrder,
         primaryKey: item.primaryKey,
         joinKey: item.joinKey,
-        remark: '',
       })),
     }
     form.setFieldsValue(nextValues as ServiceDefinitionUpsertPayload)
@@ -942,7 +935,7 @@ export default function ServiceModulePage() {
       </div>
 
       <Modal
-        title={detail ? `服务详情 · ${detail.definition.serviceCode}` : '服务详情'}
+        title="服务详情"
         width={1200}
         open={detailOpen}
         onCancel={() => setDetailOpen(false)}
@@ -1262,7 +1255,7 @@ export default function ServiceModulePage() {
       </Modal>
 
       <Drawer
-        title={editingDefinition ? `编辑服务 · ${editingDefinition.serviceCode}` : '新建服务'}
+        title={editingDefinition ? '编辑服务' : '新建服务'}
         width={980}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -1423,8 +1416,6 @@ WHERE 1 = 1
                     sourceValue: '',
                     joinKey: '',
                     configJson: '',
-                    status: 'ENABLED',
-                    remark: '',
                   })
                 }
               >
@@ -1523,7 +1514,6 @@ WHERE 1 = 1
                     required: true,
                     defaultValue: '',
                     sortOrder: fields.length,
-                    remark: '',
                   })
                 }
               >
@@ -1592,7 +1582,6 @@ WHERE 1 = 1
                     sortOrder: fields.length,
                     primaryKey: false,
                     joinKey: false,
-                    remark: '',
                   })
                 }
               >

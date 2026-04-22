@@ -218,11 +218,8 @@ class QueryExecutionComponentsIntegrationTest {
 
         DSCatalog catalog = new DSCatalog();
         catalog.setConnectionId(connection.getId());
-        catalog.setCatalogCode("public_schema");
-        catalog.setCatalogName("public");
         catalog.setCatalogType("SCHEMA");
         catalog.setCatalogValue("public");
-        catalog.setStatus("ENABLED");
         catalog.setDeleted(false);
         catalog.setCreatedBy("tester");
         catalog.setUpdatedBy("tester");
@@ -261,7 +258,6 @@ class QueryExecutionComponentsIntegrationTest {
         source.setSourceAlias("customer");
         source.setSourceType("TABLE");
         source.setSourceValue("customer_order");
-        source.setStatus("ENABLED");
         source.setDeleted(false);
         source.setCreatedBy("tester");
         source.setUpdatedBy("tester");

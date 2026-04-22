@@ -6,12 +6,8 @@ public class DSCatalog {
 
     private Long id;
     private Long connectionId;
-    private String catalogCode;
-    private String catalogName;
     private String catalogType;
     private String catalogValue;
-    private String status;
-    private String remark;
     private Boolean deleted;
     private LocalDateTime createdAt;
     private String createdBy;
@@ -34,22 +30,6 @@ public class DSCatalog {
         this.connectionId = connectionId;
     }
 
-    public String getCatalogCode() {
-        return catalogCode;
-    }
-
-    public void setCatalogCode(String catalogCode) {
-        this.catalogCode = catalogCode;
-    }
-
-    public String getCatalogName() {
-        return catalogName;
-    }
-
-    public void setCatalogName(String catalogName) {
-        this.catalogName = catalogName;
-    }
-
     public String getCatalogType() {
         return catalogType;
     }
@@ -64,22 +44,6 @@ public class DSCatalog {
 
     public void setCatalogValue(String catalogValue) {
         this.catalogValue = catalogValue;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getRemark() {
-        return remark;
-    }
-
-    public void setRemark(String remark) {
-        this.remark = remark;
     }
 
     public Boolean getDeleted() {

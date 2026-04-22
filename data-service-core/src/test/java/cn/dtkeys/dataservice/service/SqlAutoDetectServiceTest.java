@@ -142,8 +142,6 @@ class SqlAutoDetectServiceTest {
         DSCatalog catalog = new DSCatalog();
         catalog.setId(id);
         catalog.setConnectionId(connectionId);
-        catalog.setCatalogCode("public");
-        catalog.setCatalogName("public");
         catalog.setCatalogType("SCHEMA");
         catalog.setCatalogValue("public");
         return catalog;

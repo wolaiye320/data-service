@@ -19,6 +19,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -174,6 +176,30 @@ public class ConnectionManagementService {
         return getConnection(id);
     }
 
+    public void deleteConnection(Long id) {
+        DSConnection existing = getConnectionEntity(id);
+        if (dsSourceRepository.countReferencesByConnectionId(id) > 0) {
+            throw new ServiceConfigInvalidException("连接已被服务引用，禁止删除");
+        }
+        String operator = OperatorContext.getOperator().orElse("SYSTEM");
+        dsConnectionRepository.markDeleted(id, operator);
+        for (DSCatalog catalog : dsCatalogRepository.findByConnectionId(id)) {
+            dsCatalogRepository.markDeleted(catalog.getId(), operator);
+        }
+        auditLogService.record(AuditEvent.of(
+            AuditAction.DELETE_CONNECTION.name(),
+            null,
+            id,
+            "CONNECTION",
+            existing.getConnectionCode(),
+            operator,
+            OperatorContext.getRole().orElse("SYSTEM"),
+            "SUCCESS",
+            "删除数据源连接",
+            Map.of("connectionCode", existing.getConnectionCode())
+        ));
+    }
+
     public void testConnection(Long id) {
         DSConnection connection = getConnectionEntity(id);
         List<DSCatalog> catalogs = dsCatalogRepository.findByConnectionId(id);
@@ -192,6 +218,22 @@ public class ConnectionManagementService {
         ));
     }
 
+    public void testConnectionConfig(Long id, DSConnection connection, List<DSCatalog> catalogs) {
+        if (id != null) {
+            DSConnection existing = getConnectionEntity(id);
+            if (isBlank(connection.getPasswordCiphertext())) {
+                connection.setPasswordCiphertext(existing.getPasswordCiphertext());
+            }
+            if (isMaskedConnectionConfigPlaceholder(connection.getConnectionConfigJson())) {
+                connection.setConnectionConfigJson(existing.getConnectionConfigJson());
+            }
+        }
+        validateConnection(connection, true);
+        List<DSCatalog> normalizedCatalogs = normalizeCatalogs(connection.getDbType(), catalogs);
+        validateCatalogs(connection.getDbType(), normalizedCatalogs);
+        testConnectionInternal(connection, normalizedCatalogs);
+    }
+
     private void testConnectionInternal(DSConnection connection, List<DSCatalog> catalogs) {
         List<DSCatalog> effectiveCatalogs = catalogs == null || catalogs.isEmpty() ? List.of() : catalogs;
         if (effectiveCatalogs.isEmpty()) {
@@ -204,10 +246,35 @@ public class ConnectionManagementService {
 
         for (DSCatalog catalog : effectiveCatalogs) {
             catalog.setConnectionId(connection.getId());
-            try (Connection ignored = datasourceConnectionManager.createDirectDataSource(connection, catalog).getConnection()) {
-                // no-op
+            try (Connection sqlConnection = datasourceConnectionManager.createDirectDataSource(connection, catalog).getConnection()) {
+                verifyCatalogExists(sqlConnection, connection.getDbType(), catalog);
             } catch (Exception exception) {
-                throw new ServiceConfigInvalidException("连接测试失败: " + catalog.getCatalogCode() + ", " + exception.getMessage());
+                throw new ServiceConfigInvalidException("连接测试失败: " + catalog.getCatalogValue() + ", " + exception.getMessage());
+            }
+        }
+    }
+
+    private void verifyCatalogExists(Connection sqlConnection, String dbType, DSCatalog catalog) throws Exception {
+        if (catalog == null || isBlank(catalog.getCatalogType()) || isBlank(catalog.getCatalogValue())) {
+            return;
+        }
+        String normalizedDbType = dbType == null ? "" : dbType.trim().toUpperCase(Locale.ROOT);
+        String normalizedCatalogType = catalog.getCatalogType().trim().toUpperCase(Locale.ROOT);
+        String sql = switch (normalizedDbType + ":" + normalizedCatalogType) {
+            case "POSTGRESQL:SCHEMA" -> "select 1 from information_schema.schemata where schema_name = ?";
+            case "MYSQL:DATABASE" -> "select 1 from information_schema.schemata where schema_name = ?";
+            case "ORACLE:SCHEMA" -> "select 1 from all_users where username = upper(?)";
+            default -> null;
+        };
+        if (sql == null) {
+            return;
+        }
+        try (PreparedStatement statement = sqlConnection.prepareStatement(sql)) {
+            statement.setString(1, catalog.getCatalogValue());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    throw new ServiceConfigInvalidException("目标库不存在: " + catalog.getCatalogValue());
+                }
             }
         }
     }
@@ -242,7 +309,7 @@ public class ConnectionManagementService {
                 continue;
             }
             if (dsSourceRepository.countReferencesByCatalogId(existing.getId()) > 0) {
-                throw new ServiceConfigInvalidException("目标库已被服务引用，禁止删除: " + existing.getCatalogName());
+                throw new ServiceConfigInvalidException("目标库已被服务引用，禁止删除: " + existing.getCatalogValue());
             }
             dsCatalogRepository.markDeleted(existing.getId(), operator);
         }
@@ -307,17 +374,6 @@ public class ConnectionManagementService {
             next.setConnectionId(catalog.getConnectionId());
             next.setCatalogValue(trimToNull(catalog.getCatalogValue()));
             next.setCatalogType(resolveCatalogType(normalizedDbType, catalog.getCatalogType()));
-            String normalizedValue = next.getCatalogValue();
-            next.setCatalogCode(trimToNull(catalog.getCatalogCode()));
-            if (next.getCatalogCode() == null && normalizedValue != null) {
-                next.setCatalogCode(generateCatalogCode(normalizedValue));
-            }
-            next.setCatalogName(trimToNull(catalog.getCatalogName()));
-            if (next.getCatalogName() == null) {
-                next.setCatalogName(normalizedValue);
-            }
-            next.setStatus(normalizeStatus(catalog.getStatus()));
-            next.setRemark(trimToNull(catalog.getRemark()));
             next.setDeleted(catalog.getDeleted());
             next.setCreatedAt(catalog.getCreatedAt());
             next.setCreatedBy(catalog.getCreatedBy());
@@ -334,12 +390,6 @@ public class ConnectionManagementService {
         }
         Set<String> stableKeys = new LinkedHashSet<>();
         for (DSCatalog catalog : catalogs) {
-            if (isBlank(catalog.getCatalogCode())) {
-                throw new ParamInvalidException("catalogCode 不能为空");
-            }
-            if (isBlank(catalog.getCatalogName())) {
-                throw new ParamInvalidException("catalogName 不能为空");
-            }
             if (isBlank(catalog.getCatalogType())) {
                 throw new ParamInvalidException("catalogType 不能为空");
             }
@@ -347,7 +397,6 @@ public class ConnectionManagementService {
                 throw new ParamInvalidException("catalogValue 不能为空");
             }
             ensureCatalogTypeAllowed(dbType, catalog.getCatalogType());
-            catalog.setStatus(normalizeStatus(catalog.getStatus()));
             String stableKey = buildCatalogStableKey(catalog);
             if (!stableKeys.add(stableKey)) {
                 throw new ParamInvalidException("目标库重复: " + catalog.getCatalogValue());
@@ -383,12 +432,6 @@ public class ConnectionManagementService {
             case "MYSQL", "ORACLE" -> "DATABASE";
             default -> null;
         };
-    }
-
-    private String generateCatalogCode(String catalogValue) {
-        String normalized = catalogValue.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "_");
-        normalized = normalized.replaceAll("^_+|_+$", "");
-        return normalized.isBlank() ? "catalog" : normalized;
     }
 
     private String buildCatalogStableKey(DSCatalog catalog) {

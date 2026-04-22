@@ -11,7 +11,6 @@ public record FieldUpsertRequest(
     @NotBlank(message = "fieldType 不能为空") String fieldType,
     @NotNull(message = "sortOrder 不能为空") Integer sortOrder,
     Boolean primaryKey,
-    Boolean joinKey,
-    String remark
+    Boolean joinKey
 ) {
 }

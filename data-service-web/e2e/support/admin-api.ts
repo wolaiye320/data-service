@@ -22,12 +22,8 @@ type ConnectionItem = {
 type CatalogItem = {
   id?: number
   connectionId?: number
-  catalogCode: string
-  catalogName: string
   catalogType: string
   catalogValue: string
-  status?: string
-  remark?: string | null
 }
 
 type ConnectionDetail = {
@@ -129,11 +125,8 @@ export async function createPostgresConnection(
     }),
     catalogs: [
       {
-        catalogCode: `${connectionCode}_schema`,
-        catalogName: 'public',
         catalogType: 'SCHEMA',
         catalogValue: 'public',
-        status: 'ENABLED',
       },
     ],
   }
@@ -164,7 +157,7 @@ export async function createSimpleQueryDraft(
     status: 'DRAFT',
     sqlTemplate:
       options.sqlTemplate ??
-      'select customer_id as customerId, order_amount as orderAmount, active as active from customer_order where customer_id = :customerId and active = :active',
+      'select customer_id as customerId, order_amount as orderAmount, active as active from customer_order where customer_id = /* customerId */0 and active = /* active */false',
     sqlType: 'SIMPLE_SQL',
     executionMode: 'REMOTE_ONLY',
     planStatus: 'UNPLANNED',
@@ -174,7 +167,6 @@ export async function createSimpleQueryDraft(
     maxResultRows: options.maxResultRows ?? 200,
     queryTimeoutSeconds: options.queryTimeoutSeconds ?? 20,
     federatedQueryTimeoutSeconds: 40,
-    remark: 'Playwright 自动化样本',
     sources: [
       {
         connectionId: options.connectionId,
@@ -184,8 +176,6 @@ export async function createSimpleQueryDraft(
         sourceValue: 'customer_order',
         joinKey: '',
         configJson: '',
-        status: 'ENABLED',
-        remark: '',
       },
     ],
     params:
@@ -199,7 +189,6 @@ export async function createSimpleQueryDraft(
           required: true,
           defaultValue: '',
           sortOrder: 1,
-          remark: '',
         },
         {
           paramName: 'active',
@@ -209,7 +198,6 @@ export async function createSimpleQueryDraft(
           required: true,
           defaultValue: '',
           sortOrder: 2,
-          remark: '',
         },
       ],
     fields:
@@ -224,7 +212,6 @@ export async function createSimpleQueryDraft(
           sortOrder: 1,
           primaryKey: true,
           joinKey: true,
-          remark: '',
         },
         {
           sourceAlias: 'customer',
@@ -235,7 +222,6 @@ export async function createSimpleQueryDraft(
           sortOrder: 2,
           primaryKey: false,
           joinKey: false,
-          remark: '',
         },
         {
           sourceAlias: 'customer',
@@ -246,7 +232,6 @@ export async function createSimpleQueryDraft(
           sortOrder: 3,
           primaryKey: false,
           joinKey: false,
-          remark: '',
         },
       ],
   })
@@ -295,7 +280,6 @@ export async function createFederatedDraft(
     maxResultRows: 200,
     queryTimeoutSeconds: 20,
     federatedQueryTimeoutSeconds: 40,
-    remark: 'Playwright 联邦样本',
     sources: [
       {
         connectionId: options.primaryConnectionId,
@@ -305,8 +289,6 @@ export async function createFederatedDraft(
         sourceValue: options.primarySourceValue ?? 'customer_base',
         joinKey: sourceJoinKey,
         configJson: '',
-        status: 'ENABLED',
-        remark: '',
       },
       {
         connectionId: options.childConnectionId,
@@ -316,8 +298,6 @@ export async function createFederatedDraft(
         sourceValue: options.childSourceValue ?? 'customer_order_ext',
         joinKey: sourceJoinKey,
         configJson: '',
-        status: 'ENABLED',
-        remark: '',
       },
     ],
     params: [
@@ -329,7 +309,6 @@ export async function createFederatedDraft(
         required: true,
         defaultValue: '',
         sortOrder: 1,
-        remark: '',
       },
     ],
     fields: [
@@ -342,7 +321,6 @@ export async function createFederatedDraft(
         sortOrder: 1,
         primaryKey: true,
         joinKey: fieldJoinKeys.customerId ?? true,
-        remark: '',
       },
       {
         sourceAlias: 'pg_customer',
@@ -353,7 +331,6 @@ export async function createFederatedDraft(
         sortOrder: 2,
         primaryKey: false,
         joinKey: fieldJoinKeys.customerName ?? false,
-        remark: '',
       },
       {
         sourceAlias: 'pg_order',
@@ -364,7 +341,6 @@ export async function createFederatedDraft(
         sortOrder: 3,
         primaryKey: false,
         joinKey: fieldJoinKeys.orderAmount ?? false,
-        remark: '',
       },
     ],
   })
@@ -389,7 +365,7 @@ export async function createPredefinedCrossSourceDraft(
     serviceType: 'SIMPLE_QUERY',
     status: 'DRAFT',
     sqlTemplate:
-      'select customer_id as customer_base_customer_id, customer_name as customer_base_customer_name, active as customer_base_active from customer_base where active = :active and customer_id in (:customerIds) order by customer_id',
+      'select customer_id as customer_base_customer_id, customer_name as customer_base_customer_name, active as customer_base_active from customer_base where active = /* active */false and customer_id in (/* customerIds */(0)) order by customer_id',
     sqlType: 'SIMPLE_SQL',
     executionMode: 'REMOTE_PLUS_LOCAL',
     planStatus: 'UNPLANNED',
@@ -399,7 +375,6 @@ export async function createPredefinedCrossSourceDraft(
     maxResultRows: 200,
     queryTimeoutSeconds: 20,
     federatedQueryTimeoutSeconds: 40,
-    remark: 'Playwright 跨源联调样本',
     sources: [
       {
         connectionId: options.primaryConnectionId,
@@ -409,8 +384,6 @@ export async function createPredefinedCrossSourceDraft(
         sourceValue: 'customer_base',
         joinKey: '',
         configJson: '',
-        status: 'ENABLED',
-        remark: '',
       },
       {
         connectionId: options.childConnectionId,
@@ -426,10 +399,8 @@ export async function createPredefinedCrossSourceDraft(
           parentJoinField: 'customerId',
           childJoinField: 'orderCustomerId',
           childSqlTemplate:
-            'select customer_id as customer_order_ext_customer_id, order_amount as customer_order_ext_order_amount from customer_order_ext where customer_id in (:customerIds)',
+            'select customer_id as customer_order_ext_customer_id, order_amount as customer_order_ext_order_amount from customer_order_ext where customer_id in (/* customerIds */(0))',
         }),
-        status: 'ENABLED',
-        remark: '',
       },
     ],
     params: [
@@ -441,7 +412,6 @@ export async function createPredefinedCrossSourceDraft(
         required: true,
         defaultValue: '',
         sortOrder: 1,
-        remark: '',
       },
       {
         paramName: 'customerIds',
@@ -451,7 +421,6 @@ export async function createPredefinedCrossSourceDraft(
         required: true,
         defaultValue: '',
         sortOrder: 2,
-        remark: '',
       },
     ],
     fields: [
@@ -464,7 +433,6 @@ export async function createPredefinedCrossSourceDraft(
         sortOrder: 1,
         primaryKey: true,
         joinKey: true,
-        remark: '',
       },
       {
         sourceAlias: 'customer_base',
@@ -475,7 +443,6 @@ export async function createPredefinedCrossSourceDraft(
         sortOrder: 2,
         primaryKey: false,
         joinKey: false,
-        remark: '',
       },
       {
         sourceAlias: 'customer_base',
@@ -486,7 +453,6 @@ export async function createPredefinedCrossSourceDraft(
         sortOrder: 3,
         primaryKey: false,
         joinKey: false,
-        remark: '',
       },
       {
         sourceAlias: 'customer_order_ext',
@@ -497,7 +463,6 @@ export async function createPredefinedCrossSourceDraft(
         sortOrder: 4,
         primaryKey: false,
         joinKey: true,
-        remark: '',
       },
       {
         sourceAlias: 'customer_order_ext',
@@ -508,7 +473,6 @@ export async function createPredefinedCrossSourceDraft(
         sortOrder: 5,
         primaryKey: false,
         joinKey: false,
-        remark: '',
       },
     ],
   })
@@ -530,6 +494,16 @@ export async function saveFederatedSql(
     },
   )
   return response.data
+}
+
+export async function deleteService(request: APIRequestContext, serviceId: number) {
+  const response = await request.delete(`/api/admin/service-definitions/${serviceId}`, {
+    headers: ADMIN_HEADERS,
+  })
+  const payload = (await response.json()) as ApiResponse<null>
+  if (!response.ok() || !payload.success) {
+    throw new Error(`/api/admin/service-definitions/${serviceId} 删除失败: ${payload.message}`)
+  }
 }
 
 export async function listDefinitions(request: APIRequestContext) {

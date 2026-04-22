@@ -69,7 +69,7 @@ test.describe('审计日志页面', () => {
     const detailResponse = await detailResponsePromise
     expect(detailResponse.status()).toBe(200)
 
-    await expect(page.getByText(/审计详情 #/)).toBeVisible()
+    await expect(page.getByRole('dialog', { name: '审计详情' })).toBeVisible()
     await expect(page.getByText('结构化详情', { exact: true })).toBeVisible()
     await expect(page.getByText('VIEW_PLATFORM_BASELINE').last()).toBeVisible()
 

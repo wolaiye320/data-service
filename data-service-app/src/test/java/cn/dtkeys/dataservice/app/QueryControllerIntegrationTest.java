@@ -947,11 +947,8 @@ class QueryControllerIntegrationTest {
 
         DSCatalog catalog = new DSCatalog();
         catalog.setConnectionId(connection.getId());
-        catalog.setCatalogCode("public_schema");
-        catalog.setCatalogName("public");
         catalog.setCatalogType("SCHEMA");
         catalog.setCatalogValue("public");
-        catalog.setStatus("ENABLED");
         catalog.setDeleted(false);
         catalog.setCreatedBy("tester");
         catalog.setUpdatedBy("tester");
@@ -982,7 +979,6 @@ class QueryControllerIntegrationTest {
         source.setSourceAlias("customer");
         source.setSourceType("TABLE");
         source.setSourceValue("customer_order");
-        source.setStatus("ENABLED");
         source.setDeleted(false);
         source.setCreatedBy("tester");
         source.setUpdatedBy("tester");
@@ -1047,7 +1043,7 @@ class QueryControllerIntegrationTest {
         connection.setUpdatedBy("tester");
         dsConnectionRepository.insert(connection);
 
-        DSCatalog catalog = catalog(connection.getId(), "public_schema_join");
+        DSCatalog catalog = catalog(connection.getId(), "SCHEMA", "public");
         dsCatalogRepository.insert(catalog);
 
         DSConnection childConnection = connection;
@@ -1068,7 +1064,7 @@ class QueryControllerIntegrationTest {
             childConnection.setUpdatedBy("tester");
             dsConnectionRepository.insert(childConnection);
 
-            childCatalog = catalog(childConnection.getId(), "public_schema_join_child");
+            childCatalog = catalog(childConnection.getId(), "SCHEMA", "public");
             dsCatalogRepository.insert(childCatalog);
         }
 
@@ -1105,7 +1101,6 @@ class QueryControllerIntegrationTest {
         primarySource.setSourceAlias("customer_base");
         primarySource.setSourceType("TABLE");
         primarySource.setSourceValue("customer_base");
-        primarySource.setStatus("ENABLED");
         primarySource.setDeleted(false);
         primarySource.setCreatedBy("tester");
         primarySource.setUpdatedBy("tester");
@@ -1128,7 +1123,6 @@ class QueryControllerIntegrationTest {
               "childSqlTemplate": "select customer_id as customer_order_ext_customer_id, order_amount as customer_order_ext_order_amount from customer_order_ext where customer_id in (/* customerIds */(0))"
             }
             """);
-        childSource.setStatus("ENABLED");
         childSource.setDeleted(false);
         childSource.setCreatedBy("tester");
         childSource.setUpdatedBy("tester");
@@ -1183,7 +1177,7 @@ class QueryControllerIntegrationTest {
         pgConnection.setCreatedBy("tester");
         pgConnection.setUpdatedBy("tester");
         dsConnectionRepository.insert(pgConnection);
-        DSCatalog pgCatalog = catalog(pgConnection.getId(), "fed_pg_primary_catalog");
+        DSCatalog pgCatalog = catalog(pgConnection.getId(), "SCHEMA", "public");
         dsCatalogRepository.insert(pgCatalog);
 
         DSConnection childConnection = pgConnection;
@@ -1209,11 +1203,8 @@ class QueryControllerIntegrationTest {
             dsConnectionRepository.insert(childConnection);
             childCatalog = new DSCatalog();
             childCatalog.setConnectionId(childConnection.getId());
-            childCatalog.setCatalogCode("fed_mysql_catalog");
-            childCatalog.setCatalogName("crm");
             childCatalog.setCatalogType("DATABASE");
             childCatalog.setCatalogValue("crm");
-            childCatalog.setStatus("ENABLED");
             childCatalog.setDeleted(false);
             childCatalog.setCreatedBy("tester");
             childCatalog.setUpdatedBy("tester");
@@ -1252,7 +1243,6 @@ class QueryControllerIntegrationTest {
         primarySource.setSourceType("TABLE");
         primarySource.setSourceValue("customer_base");
         primarySource.setJoinKey("customer_id");
-        primarySource.setStatus("ENABLED");
         primarySource.setDeleted(false);
         primarySource.setCreatedBy("tester");
         primarySource.setUpdatedBy("tester");
@@ -1266,7 +1256,6 @@ class QueryControllerIntegrationTest {
         childSource.setSourceType("TABLE");
         childSource.setSourceValue(childTable);
         childSource.setJoinKey("customer_id");
-        childSource.setStatus("ENABLED");
         childSource.setDeleted(false);
         childSource.setCreatedBy("tester");
         childSource.setUpdatedBy("tester");
@@ -1291,14 +1280,11 @@ class QueryControllerIntegrationTest {
         dsFieldRepository.insert(field(definition.getId(), childAlias, "order_amount", "orderAmount", "DECIMAL", 4));
     }
 
-    private DSCatalog catalog(Long connectionId, String catalogCode) {
+    private DSCatalog catalog(Long connectionId, String catalogType, String catalogValue) {
         DSCatalog catalog = new DSCatalog();
         catalog.setConnectionId(connectionId);
-        catalog.setCatalogCode(catalogCode);
-        catalog.setCatalogName("public");
-        catalog.setCatalogType("SCHEMA");
-        catalog.setCatalogValue("public");
-        catalog.setStatus("ENABLED");
+        catalog.setCatalogType(catalogType);
+        catalog.setCatalogValue(catalogValue);
         catalog.setDeleted(false);
         catalog.setCreatedBy("tester");
         catalog.setUpdatedBy("tester");

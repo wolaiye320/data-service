@@ -99,9 +99,6 @@ public class ServiceDefinitionLoader {
 
         List<DataServiceRuntimeSource> runtimeSources = new ArrayList<>(sources.size());
         for (DSSource source : sources) {
-            if (!"ENABLED".equalsIgnoreCase(source.getStatus())) {
-                throw new ServiceConfigInvalidException("查询来源未启用, sourceId=" + source.getId());
-            }
             DSConnection connection = dsConnectionRepository.findById(source.getConnectionId());
             if (connection == null) {
                 throw new ServiceConfigInvalidException("查询来源缺少连接配置, sourceId=" + source.getId());
@@ -115,9 +112,6 @@ public class ServiceDefinitionLoader {
                 catalog = dsCatalogRepository.findById(source.getCatalogId());
                 if (catalog == null) {
                     throw new ServiceConfigInvalidException("查询来源缺少目录配置, sourceId=" + source.getId());
-                }
-                if (!"ENABLED".equalsIgnoreCase(catalog.getStatus())) {
-                    throw new ServiceConfigInvalidException("查询来源目录未启用, sourceId=" + source.getId());
                 }
             }
 

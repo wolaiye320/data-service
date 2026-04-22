@@ -17,10 +17,10 @@ public interface DSFieldRepository {
     @Insert("""
         insert into ds_field (
             service_id, source_alias, source_column, field_name, display_name, field_type, sort_order,
-            primary_key, join_key, remark, deleted, created_by, updated_by
+            primary_key, join_key, deleted, created_by, updated_by
         ) values (
             #{serviceId}, #{sourceAlias}, #{sourceColumn}, #{fieldName}, #{displayName}, #{fieldType}, #{sortOrder},
-            #{primaryKey}, #{joinKey}, #{remark}, #{deleted}, #{createdBy}, #{updatedBy}
+            #{primaryKey}, #{joinKey}, #{deleted}, #{createdBy}, #{updatedBy}
         )
         """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
@@ -28,7 +28,7 @@ public interface DSFieldRepository {
 
     @Select("""
         select id, service_id, source_alias, source_column, field_name, display_name, field_type, sort_order,
-               primary_key, join_key, remark, deleted, created_at, created_by, updated_at, updated_by
+               primary_key, join_key, deleted, created_at, created_by, updated_at, updated_by
         from ds_field
         where service_id = #{serviceId} and deleted = false
         order by sort_order, id

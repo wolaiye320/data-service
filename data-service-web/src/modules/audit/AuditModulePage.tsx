@@ -145,7 +145,7 @@ export function AuditModulePage() {
         render: (_, record) => (
           <ActionIconButton
             icon={<EyeOutlined />}
-            label={`查看审计详情 ${record.id}`}
+            label="查看审计详情"
             onClick={() => void openDetail(record.id)}
           />
         ),
@@ -285,7 +285,7 @@ export function AuditModulePage() {
       </div>
 
       <Drawer
-        title={selectedRecord ? `审计详情 #${selectedRecord.id}` : '审计详情'}
+        title="审计详情"
         width={720}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}

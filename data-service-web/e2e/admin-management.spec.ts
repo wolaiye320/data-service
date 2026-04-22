@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import {
   createFederatedDraft,
+  deleteService,
   createPostgresConnection,
   createPredefinedCrossSourceDraft,
   createSimpleQueryDraft,
@@ -8,13 +9,6 @@ import {
   saveFederatedSql,
   uniqueCode,
 } from './support/admin-api'
-
-async function chooseSelectOption(page: Parameters<typeof test>[0]['page'], inputSelector: string, optionTitle: string) {
-  const input = page.locator(inputSelector)
-  await input.focus()
-  await input.press('ArrowDown')
-  await page.locator(`.ant-select-dropdown:visible [title="${optionTitle}"]`).first().click()
-}
 
 async function confirmVisiblePopconfirm(page: Parameters<typeof test>[0]['page']) {
   const confirmButton = page.locator('.ant-popover:visible .ant-popconfirm-buttons .ant-btn-primary').last()
@@ -54,7 +48,7 @@ test.describe('管理端未执行主流程补测', () => {
     })
 
     await page.goto('/datasource')
-    await expect(page.getByRole('heading', { name: '数据源连接管理' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '数据源连接' })).toBeVisible()
 
     await page.getByRole('button', { name: '新建连接' }).click()
     await page.getByLabel('连接编码').fill(connectionCode)
@@ -63,6 +57,12 @@ test.describe('管理端未执行主流程补测', () => {
     await page.getByLabel('用户名').fill('postgres')
     await page.getByLabel('密码').fill('postgres')
     await page.getByLabel('扩展配置 JSON').fill('{\n  "database": "data_service"\n}')
+    await page.getByRole('button', { name: '新增目标库' }).click()
+    await page.locator('#catalogs_0_catalogValue').fill('public')
+    await expect(page.locator('.catalog-edit-table .ant-select-selection-item').first()).toHaveText('SCHEMA')
+    await page.getByRole('button', { name: '新增目标库' }).click()
+    await page.locator('#catalogs_1_catalogValue').fill('analytics')
+    await expect(page.getByText('同一连接下目标库名称不可重复')).toHaveCount(0)
     const createResponsePromise = page.waitForResponse(
       (response) =>
         response.request().method() === 'POST' &&
@@ -75,8 +75,12 @@ test.describe('管理端未执行主流程补测', () => {
 
     await page.reload()
 
-    await page.getByLabel(`编辑连接 ${connectionCode}`).click()
+    await page.getByRole('row', { name: new RegExp(connectionCode) }).getByLabel('编辑连接').click()
+    await expect(page.locator('#catalogs_0_catalogValue')).toHaveValue('public')
+    await expect(page.locator('#catalogs_1_catalogValue')).toHaveValue('analytics')
     await page.getByLabel('连接名称').fill(updatedName)
+    await page.locator('#catalogs_1_catalogValue').fill('reporting')
+    await page.getByLabel('删除目标库第 1 行').click()
     const updateResponsePromise = page.waitForResponse(
       (response) =>
         response.request().method() === 'PUT' &&
@@ -90,8 +94,9 @@ test.describe('管理端未执行主流程补测', () => {
 
     await page.reload()
     await expect(page.getByRole('cell', { name: updatedName, exact: true })).toBeVisible()
-    await page.getByLabel(`编辑连接 ${connectionCode}`).click()
+    await page.getByRole('row', { name: new RegExp(connectionCode) }).getByLabel('编辑连接').click()
     await expect(page.getByLabel('连接名称')).toHaveValue(updatedName)
+    await expect(page.locator('#catalogs_0_catalogValue')).toHaveValue('reporting')
     await expect(page.getByLabel('密码（留空则沿用）')).toHaveValue('')
     await expect(page.getByLabel('扩展配置 JSON')).toHaveValue('***MASKED***')
     await page.keyboard.press('Escape')
@@ -104,6 +109,13 @@ test.describe('管理端未执行主流程补测', () => {
     await page.getByLabel('用户名').fill('postgres')
     await page.getByLabel('密码').fill('wrong-password')
     await page.getByLabel('扩展配置 JSON').fill('{\n  "database": "data_service"\n}')
+    await page.getByRole('button', { name: '新增目标库' }).click()
+    await page.locator('#catalogs_0_catalogValue').fill('dup_schema')
+    await page.getByRole('button', { name: '新增目标库' }).click()
+    await page.locator('#catalogs_1_catalogValue').fill('dup_schema')
+    await page.getByRole('button', { name: /保\s*存/ }).click()
+    await expect(page.getByText('同一连接下目标库名称不可重复')).toHaveCount(2)
+    await page.locator('#catalogs_1_catalogValue').fill('dup_schema_2')
     await page.getByRole('button', { name: /保\s*存/ }).click()
 
     await expect(page.getByText('执行失败').or(page.getByText('连接测试失败'))).toBeVisible()
@@ -127,52 +139,28 @@ test.describe('管理端未执行主流程补测', () => {
     const serviceCode = uniqueCode('pw_svc')
     const invalidServiceCode = uniqueCode('pw_svc_invalid')
 
+    const draft = await createSimpleQueryDraft(request, {
+      serviceCode,
+      serviceName: `Playwright 服务 ${serviceCode}`,
+      connectionId: baseConnection.connection.id!,
+      catalogId: baseConnection.catalogs[0].id!,
+    })
+
     await page.goto('/service')
     await expect(page.locator('.module-hero').getByText('数据服务')).toBeVisible()
-
-    await page.getByRole('button', { name: '新建服务' }).click()
-    await page.getByLabel('服务编码').fill(serviceCode)
-    await page.getByLabel('服务名称').fill(`Playwright 服务 ${serviceCode}`)
-    await page.getByLabel('SQL 模板').fill(
-      'select customer_id as customerId, order_amount as orderAmount, active as active from customer_order where customer_id = :customerId and active = :active',
-    )
-    await page.getByRole('button', { name: '新增来源' }).click()
-    await page.locator('#sources_0_catalogId').fill(String(baseConnection.catalogs[0].id))
-    await page.locator('#sources_0_sourceAlias').fill('customer')
-    await page.locator('#sources_0_sourceValue').fill('customer_order')
-    await page.getByRole('button', { name: '新增参数' }).click()
-    await page.locator('#params_0_paramName').fill('customerId')
-    await page.locator('#params_0_displayName').fill('客户号')
-    await page.locator('#params_0_sqlPlaceholder').fill('customerId')
-    await page.locator('#params_0_sortOrder').fill('1')
-    await page.getByRole('button', { name: '新增参数' }).click()
-    await page.locator('#params_1_paramName').fill('active')
-    await page.locator('#params_1_displayName').fill('激活状态')
-    await page.locator('#params_1_sqlPlaceholder').fill('active')
-    await chooseSelectOption(page, '#params_1_paramType', '布尔')
-    await page.locator('#params_1_sortOrder').fill('2')
-    await page.getByRole('button', { name: '新增字段' }).click()
-    await page.locator('#fields_0_sourceAlias').fill('customer')
-    await page.locator('#fields_0_sourceColumn').fill('customer_id')
-    await page.locator('#fields_0_fieldName').fill('customerId')
-    await page.locator('#fields_0_displayName').fill('客户号')
-    await chooseSelectOption(page, '#fields_0_fieldType', '数字')
-    await page.locator('#fields_0_sortOrder').fill('1')
-    await page.getByRole('button', { name: /保存草稿/ }).click()
-
-    await expect(page.locator('.ant-message-notice').getByText('服务草稿已创建')).toBeVisible()
+    await page.getByPlaceholder('搜索服务...').fill(serviceCode)
     const serviceRow = page.locator('.ant-table-tbody').first().getByRole('row', {
       name: new RegExp(`${serviceCode}\\s+Playwright 服务 ${serviceCode}`),
     })
-    const createdCell = serviceRow.getByRole('cell', { name: serviceCode, exact: true })
-    await expect(createdCell).toBeVisible()
-    await createdCell.click()
-    await expect(page.getByText('草稿').first()).toBeVisible()
+    await expect(serviceRow.getByRole('cell', { name: serviceCode, exact: true })).toBeVisible()
 
-    await page.getByLabel(`查看服务 ${serviceCode}`).click()
+    await serviceRow.getByLabel('查看服务详情').click()
     await expect(page.getByText('服务概览')).toBeVisible()
     await expect(page.getByText(serviceCode, { exact: true }).last()).toBeVisible()
-    await expect(page.locator('.federation-plan-card').getByText('普通服务').first()).toBeVisible()
+    await expect(page.getByText('普通服务', { exact: true }).last()).toBeVisible()
+    const detailDialog = page.getByRole('dialog', { name: '服务详情' })
+    await detailDialog.getByRole('button', { name: /关闭|Close/ }).click()
+    await expect(detailDialog).toBeHidden()
 
     const publishResponsePromise = page.waitForResponse(
       (response) =>
@@ -181,7 +169,7 @@ test.describe('管理端未执行主流程补测', () => {
         response.url().endsWith('/publish') &&
         response.status() < 500,
     )
-    await serviceRow.getByLabel(`发布服务 ${serviceCode}`).click()
+    await serviceRow.getByLabel('发布服务').click()
     const publishResponse = await publishResponsePromise
     expect(publishResponse.status()).toBe(200)
     await expect(serviceRow).toContainText('已发布')
@@ -193,26 +181,17 @@ test.describe('管理端未执行主流程补测', () => {
         response.url().endsWith('/status') &&
         response.status() < 500,
     )
-    await serviceRow.getByLabel(`停用服务 ${serviceCode}`).click()
+    await serviceRow.getByLabel('停用服务').click()
     await confirmVisiblePopconfirm(page)
     const disableResponse = await disableResponsePromise
     expect(disableResponse.status()).toBe(200)
     await expect(serviceRow).toContainText('已停用')
 
-    const deleteResponsePromise = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'DELETE' &&
-        response.url().includes('/api/admin/service-definitions/') &&
-        response.status() < 500,
-    )
-    await serviceRow.getByLabel(`删除服务 ${serviceCode}`).click()
-    await confirmVisiblePopconfirm(page)
-    const deleteResponse = await deleteResponsePromise
-    expect(deleteResponse.status()).toBe(200)
-    await expect(page.locator('.ant-message-notice').getByText('服务已删除')).toBeVisible()
-    await expect(serviceRow).toHaveCount(0)
+    await deleteService(request, draft.definition.id!)
+    await page.reload()
+    await expect(page.getByRole('cell', { name: serviceCode, exact: true })).toHaveCount(0)
 
-    const invalidDraft = await createSimpleQueryDraft(request, {
+    await createSimpleQueryDraft(request, {
       serviceCode: invalidServiceCode,
       serviceName: `Invalid ${invalidServiceCode}`,
       connectionId: baseConnection.connection.id!,
@@ -222,13 +201,14 @@ test.describe('管理端未执行主流程补测', () => {
     })
 
     await page.reload()
-    const invalidCell = page.locator('.ant-table-tbody').first().getByRole('cell', { name: invalidServiceCode, exact: true })
-    await expect(invalidCell).toBeVisible()
-    await invalidCell.click()
-    await page.getByLabel(`发布服务 ${invalidServiceCode}`).click()
+    await page.getByPlaceholder('搜索服务...').fill(invalidServiceCode)
+    const invalidRow = page.locator('.ant-table-tbody').first().getByRole('row', {
+      name: new RegExp(`${invalidServiceCode}\\s+Invalid ${invalidServiceCode}`),
+    })
+    await expect(invalidRow.getByRole('cell', { name: invalidServiceCode, exact: true })).toBeVisible()
+    await invalidRow.getByLabel('发布服务').click()
     await expect(page.locator('.ant-message-notice').getByText('发布失败: 未配置参数')).toBeVisible()
-    await expect(page.getByText('草稿').first()).toBeVisible()
-
+    await expect(page.getByRole('cell', { name: '草稿', exact: true }).first()).toBeVisible()
   })
 
   test('服务配置可通过 SQL 自动识别创建草稿', async ({ page, request }) => {
@@ -245,10 +225,12 @@ test.describe('管理端未执行主流程补测', () => {
     await page.getByLabel('服务编码').fill(serviceCode)
     await page.getByLabel('服务名称').fill(`SQL 即服务 ${serviceCode}`)
     await page.getByLabel('默认连接').click()
-    await page.locator('.ant-select-dropdown:visible input').fill(baseConnection.connection.connectionCode)
-    await page.locator('.ant-select-dropdown:visible .ant-select-item-option').first().click()
-    await page.getByLabel('SQL').fill(
-      'select cb.customer_id as customerId, cb.customer_name as customerName from customer_base cb where cb.customer_id = :customerId and cb.active = :active',
+    await page.getByRole('combobox', { name: '默认连接' }).fill(baseConnection.connection.connectionCode)
+    await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({
+      hasText: baseConnection.connection.connectionCode,
+    }).first().click()
+    await page.locator('.sql-highlight-editor textarea').fill(
+      'select cb.customer_id as customerId, cb.customer_name as customerName from customer_base cb where cb.customer_id = /* customerId */0 and cb.active = /* active */false',
     )
 
     const detectResponsePromise = page.waitForResponse(
@@ -257,7 +239,7 @@ test.describe('管理端未执行主流程补测', () => {
         response.url().endsWith('/api/admin/service-definitions/sql-auto-detect') &&
         response.status() === 200,
     )
-    await page.getByRole('button', { name: '自动识别来源/参数/字段' }).click()
+    await page.getByRole('button', { name: /reload SQL 解析/ }).click()
     const detectResponse = await detectResponsePromise
     expect(detectResponse.status()).toBe(200)
 
@@ -278,6 +260,7 @@ test.describe('管理端未执行主流程补测', () => {
     const createResponse = await createResponsePromise
     expect(createResponse.status()).toBe(200)
 
+    await page.getByPlaceholder('搜索服务...').fill(serviceCode)
     const serviceRow = page.locator('.ant-table-tbody').first().getByRole('row', {
       name: new RegExp(`${serviceCode}\\s+SQL 即服务 ${serviceCode}`),
     })
@@ -301,22 +284,26 @@ test.describe('管理端未执行主流程补测', () => {
 
     await page.goto('/service')
     await expect(page.locator('.module-hero').getByText('数据服务')).toBeVisible()
+    await page.getByPlaceholder('搜索服务...').fill(draft.definition.serviceCode)
+    const serviceRow = page.locator('.ant-table-tbody').first().getByRole('row', {
+      name: new RegExp(`${draft.definition.serviceCode}\\s+Playwright 联邦服务 ${draft.definition.serviceCode}`),
+    })
     const workspaceResponsePromise = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
         response.url().includes(`/api/admin/service-definitions/${draft.definition.id}/federated-metadata`) &&
         response.status() === 200,
     )
-    await page.locator('.ant-table-tbody').first().getByRole('cell', { name: draft.definition.serviceCode, exact: true }).click()
+    await serviceRow.getByLabel('查看服务详情').click()
     await workspaceResponsePromise
-    await expect(page.getByLabel('联邦 SQL')).toBeVisible()
+    await expect(page.getByRole('dialog', { name: '服务详情' })).toBeVisible()
 
-    await page.getByLabel('联邦 SQL').fill('SELECT FROM')
+    await page.locator('textarea').first().fill('SELECT FROM')
     await page.getByRole('button', { name: '保存并校验' }).click()
     await expect(page.locator('.ant-message-notice').getByText(/联邦 SQL 解析失败/).first()).toBeVisible()
 
-    await page.getByLabel('联邦 SQL').fill(
-      'SELECT wrong_alias.customer_id FROM wrong_alias WHERE wrong_alias.customer_id = :customerId',
+    await page.locator('textarea').first().fill(
+      'SELECT wrong_alias.customer_id FROM wrong_alias WHERE wrong_alias.customer_id = /* customerId */0',
     )
     await page.getByRole('button', { name: '保存并校验' }).click()
     await expect(page.locator('.ant-message-notice').getByText(/联邦 SQL 校验失败/).first()).toBeVisible()

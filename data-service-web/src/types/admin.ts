@@ -1,12 +1,8 @@
 export interface CatalogItem {
   id?: number
   connectionId?: number
-  catalogCode: string
-  catalogName: string
   catalogType: string
   catalogValue: string
-  status?: string
-  remark?: string | null
 }
 
 export interface ConnectionItem {
@@ -43,8 +39,6 @@ export interface SourceItem {
   sourceValue: string
   joinKey?: string | null
   configJson?: string | null
-  status?: string
-  remark?: string | null
 }
 
 export interface ParamItem {
@@ -57,7 +51,6 @@ export interface ParamItem {
   required?: boolean
   defaultValue?: string | null
   sortOrder: number
-  remark?: string | null
 }
 
 export interface FieldItem {
@@ -71,7 +64,6 @@ export interface FieldItem {
   sortOrder: number
   primaryKey?: boolean
   joinKey?: boolean
-  remark?: string | null
 }
 
 export interface ServiceDefinition {

@@ -388,7 +388,6 @@ public class PredefinedJoinQueryExecutor {
         copied.setRequired(sourceParam.getRequired());
         copied.setDefaultValue(sourceParam.getDefaultValue());
         copied.setSortOrder(sourceParam.getSortOrder());
-        copied.setRemark(sourceParam.getRemark());
         return copied;
     }
 

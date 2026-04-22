@@ -244,13 +244,11 @@ class PredefinedJoinQueryExecutorTest {
         DSCatalog catalog = new DSCatalog();
         catalog.setId(1L);
         catalog.setCatalogValue("public");
-        catalog.setStatus("ENABLED");
 
         DSSource source = new DSSource();
         source.setId(connectionId);
         source.setConnectionId(connectionId);
         source.setSourceAlias(sourceAlias);
-        source.setStatus("ENABLED");
         if ("customer_order_ext".equals(sourceAlias)) {
             source.setConfigJson("""
                 {

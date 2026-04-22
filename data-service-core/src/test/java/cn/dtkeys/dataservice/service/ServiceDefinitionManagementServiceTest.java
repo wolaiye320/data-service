@@ -323,7 +323,6 @@ class ServiceDefinitionManagementServiceTest {
         source.setSourceAlias("customer");
         source.setSourceType("TABLE");
         source.setSourceValue("customer_order");
-        source.setStatus("ENABLED");
         return source;
     }
 
@@ -334,7 +333,6 @@ class ServiceDefinitionManagementServiceTest {
         source.setSourceAlias("order");
         source.setSourceType("TABLE");
         source.setSourceValue("customer_order");
-        source.setStatus("ENABLED");
         return source;
     }
 

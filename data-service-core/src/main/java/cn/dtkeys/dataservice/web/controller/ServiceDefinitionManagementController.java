@@ -182,8 +182,6 @@ public class ServiceDefinitionManagementController {
             source.setSourceValue(request.sourceValue());
             source.setJoinKey(request.joinKey());
             source.setConfigJson(request.configJson());
-            source.setStatus(request.status());
-            source.setRemark(request.remark());
             return source;
         }).toList();
     }
@@ -201,7 +199,6 @@ public class ServiceDefinitionManagementController {
             param.setRequired(request.required());
             param.setDefaultValue(request.defaultValue());
             param.setSortOrder(request.sortOrder());
-            param.setRemark(request.remark());
             return param;
         }).toList();
     }
@@ -220,7 +217,6 @@ public class ServiceDefinitionManagementController {
             field.setSortOrder(request.sortOrder());
             field.setPrimaryKey(request.primaryKey());
             field.setJoinKey(request.joinKey());
-            field.setRemark(request.remark());
             return field;
         }).toList();
     }

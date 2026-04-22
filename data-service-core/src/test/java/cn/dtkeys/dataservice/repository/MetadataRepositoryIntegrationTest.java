@@ -105,11 +105,8 @@ class MetadataRepositoryIntegrationTest {
 
         DSCatalog catalog = new DSCatalog();
         catalog.setConnectionId(connection.getId());
-        catalog.setCatalogCode("bank_public");
-        catalog.setCatalogName("bankdb.public");
         catalog.setCatalogType("SCHEMA");
         catalog.setCatalogValue("public");
-        catalog.setStatus("ENABLED");
         catalog.setDeleted(false);
         catalog.setCreatedBy("tester");
         catalog.setUpdatedBy("tester");
@@ -141,7 +138,6 @@ class MetadataRepositoryIntegrationTest {
         source.setSourceAlias("customer");
         source.setSourceType("TABLE");
         source.setSourceValue("customer");
-        source.setStatus("ENABLED");
         source.setDeleted(false);
         source.setCreatedBy("tester");
         source.setUpdatedBy("tester");
@@ -188,8 +184,8 @@ class MetadataRepositoryIntegrationTest {
 
         assertThat(dsConnectionRepository.findByCode("pg_bank").getConnectionName()).isEqualTo("Bank PostgreSQL");
         assertThat(dsCatalogRepository.findByConnectionId(connection.getId()))
-            .extracting(DSCatalog::getCatalogCode)
-            .containsExactly("bank_public");
+            .extracting(DSCatalog::getCatalogValue)
+            .containsExactly("public");
         assertThat(dsDefinitionRepository.findByServiceCode("customer_profile_query").getServiceName())
             .isEqualTo("客户画像查询");
         assertThat(dsSourceRepository.findByServiceId(definition.getId()))

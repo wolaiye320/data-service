@@ -122,7 +122,6 @@ class FederatedRuntimeQueryExecutorLocalIntegrationTest {
         source.setSourceType("TABLE");
         source.setSourceValue(sourceValue);
         source.setJoinKey(joinKey);
-        source.setStatus("ENABLED");
         return new DataServiceRuntimeSource(source, connection, catalog);
     }
 
@@ -146,11 +145,8 @@ class FederatedRuntimeQueryExecutorLocalIntegrationTest {
     private DSCatalog postgresCatalog() {
         DSCatalog catalog = new DSCatalog();
         catalog.setId(1L);
-        catalog.setCatalogCode("postg_federation1_schema");
-        catalog.setCatalogName(setting("FEDERATION_TEST_PG_SCHEMA", "postg_federation1"));
         catalog.setCatalogType("SCHEMA");
         catalog.setCatalogValue(setting("FEDERATION_TEST_PG_SCHEMA", "postg_federation1"));
-        catalog.setStatus("ENABLED");
         return catalog;
     }
 
@@ -174,11 +170,8 @@ class FederatedRuntimeQueryExecutorLocalIntegrationTest {
     private DSCatalog mysqlCatalog(String database) {
         DSCatalog catalog = new DSCatalog();
         catalog.setId("mysql_federation1".equals(database) ? 2L : 3L);
-        catalog.setCatalogCode(database + "_catalog");
-        catalog.setCatalogName(database);
         catalog.setCatalogType("DATABASE");
         catalog.setCatalogValue(database);
-        catalog.setStatus("ENABLED");
         return catalog;
     }
 

@@ -21,6 +21,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,6 +58,12 @@ class ConnectionManagementServiceTest {
     private Connection sqlConnection;
 
     @Mock
+    private PreparedStatement preparedStatement;
+
+    @Mock
+    private ResultSet resultSet;
+
+    @Mock
     private AuditLogService auditLogService;
 
     @InjectMocks
@@ -66,9 +74,15 @@ class ConnectionManagementServiceTest {
         OperatorContext.clear();
     }
 
-    private void mockSuccessfulConnection() throws Exception {
+    private void mockDirectConnection() throws Exception {
         when(dataSource.getConnection()).thenReturn(sqlConnection);
         when(datasourceConnectionManager.createDirectDataSource(any(), any())).thenReturn(dataSource);
+    }
+
+    private void mockExistingCatalogLookup(boolean exists) throws Exception {
+        when(sqlConnection.prepareStatement(any())).thenReturn(preparedStatement);
+        when(preparedStatement.executeQuery()).thenReturn(resultSet);
+        when(resultSet.next()).thenReturn(exists);
     }
 
     @Test
@@ -142,7 +156,8 @@ class ConnectionManagementServiceTest {
         DSCatalog catalog = new DSCatalog();
         catalog.setCatalogValue(" analytics ");
         when(dsConnectionRepository.findByCode("pg_conn")).thenReturn(null).thenReturn(buildConnection(100L, "pg_conn", "ENABLED"));
-        mockSuccessfulConnection();
+        mockDirectConnection();
+        mockExistingCatalogLookup(true);
         when(dsConnectionRepository.findById(100L)).thenReturn(buildConnection(100L, "pg_conn", "ENABLED"));
         when(dsCatalogRepository.findByConnectionId(100L)).thenReturn(List.of());
         when(dsSourceCapabilityRepository.findByConnectionId(100L)).thenReturn(List.of());
@@ -152,9 +167,7 @@ class ConnectionManagementServiceTest {
         ArgumentCaptor<DSCatalog> catalogCaptor = ArgumentCaptor.forClass(DSCatalog.class);
         verify(dsCatalogRepository).insert(catalogCaptor.capture());
         assertThat(catalogCaptor.getValue().getCatalogType()).isEqualTo("SCHEMA");
-        assertThat(catalogCaptor.getValue().getCatalogCode()).isEqualTo("analytics");
-        assertThat(catalogCaptor.getValue().getCatalogName()).isEqualTo("analytics");
-        assertThat(catalogCaptor.getValue().getStatus()).isEqualTo("ENABLED");
+        assertThat(catalogCaptor.getValue().getCatalogValue()).isEqualTo("analytics");
     }
 
     @Test
@@ -163,8 +176,6 @@ class ConnectionManagementServiceTest {
         connection.setDbType("MYSQL");
         DSCatalog catalog = new DSCatalog();
         catalog.setCatalogType("SCHEMA");
-        catalog.setCatalogCode("crm");
-        catalog.setCatalogName("crm");
         catalog.setCatalogValue("crm");
         when(dsConnectionRepository.findById(7L)).thenReturn(buildConnection(7L, "mysql_conn", "ENABLED"));
 
@@ -178,11 +189,10 @@ class ConnectionManagementServiceTest {
         OperatorContext.setOperator("admin-a");
         DSConnection existing = buildConnection(7L, "pg_conn", "ENABLED");
         DSCatalog existingCatalog = buildCatalog(11L, "SCHEMA", "analytics");
-        existingCatalog.setCatalogName("analytics");
         DSConnection update = buildConnection(null, "pg_conn", "ENABLED");
         when(dsConnectionRepository.findById(7L)).thenReturn(existing);
         when(dsConnectionRepository.findByCode("pg_conn")).thenReturn(existing);
-        mockSuccessfulConnection();
+        mockDirectConnection();
         when(dsCatalogRepository.findByConnectionId(7L)).thenReturn(List.of(existingCatalog));
         when(dsSourceRepository.countReferencesByCatalogId(11L)).thenReturn(1L);
 
@@ -196,15 +206,13 @@ class ConnectionManagementServiceTest {
         OperatorContext.setOperator("admin-a");
         DSConnection existing = buildConnection(7L, "pg_conn", "ENABLED");
         DSCatalog existingCatalog = buildCatalog(11L, "SCHEMA", "analytics");
-        existingCatalog.setCatalogCode("analytics");
-        existingCatalog.setCatalogName("analytics");
         DSConnection update = buildConnection(null, "pg_conn", "ENABLED");
         DSCatalog catalog = new DSCatalog();
         catalog.setCatalogValue("analytics");
-        catalog.setRemark("new remark");
         when(dsConnectionRepository.findById(7L)).thenReturn(existing);
         when(dsConnectionRepository.findByCode("pg_conn")).thenReturn(existing);
-        mockSuccessfulConnection();
+        mockDirectConnection();
+        mockExistingCatalogLookup(true);
         when(dsCatalogRepository.findByConnectionId(7L)).thenReturn(List.of(existingCatalog));
         when(dsSourceCapabilityRepository.findByConnectionId(7L)).thenReturn(List.of());
 
@@ -213,9 +221,72 @@ class ConnectionManagementServiceTest {
         ArgumentCaptor<DSCatalog> catalogCaptor = ArgumentCaptor.forClass(DSCatalog.class);
         verify(dsCatalogRepository).update(catalogCaptor.capture());
         assertThat(catalogCaptor.getValue().getId()).isEqualTo(11L);
-        assertThat(catalogCaptor.getValue().getRemark()).isEqualTo("new remark");
+        assertThat(catalogCaptor.getValue().getCatalogValue()).isEqualTo("analytics");
         verify(dsCatalogRepository, never()).insert(any());
         verify(dsCatalogRepository, never()).markDeleted(any(), any());
+    }
+
+    @Test
+    void shouldDeleteConnectionAndMarkCatalogsDeleted() {
+        OperatorContext.setOperator("admin-a");
+        OperatorContext.setRole("ADMIN");
+        DSConnection existing = buildConnection(7L, "pg_conn", "ENABLED");
+        DSCatalog catalog = buildCatalog(11L, "SCHEMA", "public");
+        when(dsConnectionRepository.findById(7L)).thenReturn(existing);
+        when(dsSourceRepository.countReferencesByConnectionId(7L)).thenReturn(0L);
+        when(dsCatalogRepository.findByConnectionId(7L)).thenReturn(List.of(catalog));
+
+        connectionManagementService.deleteConnection(7L);
+
+        verify(dsConnectionRepository).markDeleted(7L, "admin-a");
+        verify(dsCatalogRepository).markDeleted(11L, "admin-a");
+        verify(auditLogService).record(org.mockito.ArgumentMatchers.argThat(event ->
+            "DELETE_CONNECTION".equals(event.eventType())
+                && "pg_conn".equals(event.targetId())
+                && "SUCCESS".equals(event.operationResult())
+        ));
+    }
+
+    @Test
+    void shouldRejectDeletingConnectionReferencedByService() {
+        DSConnection existing = buildConnection(7L, "pg_conn", "ENABLED");
+        when(dsConnectionRepository.findById(7L)).thenReturn(existing);
+        when(dsSourceRepository.countReferencesByConnectionId(7L)).thenReturn(1L);
+
+        assertThatThrownBy(() -> connectionManagementService.deleteConnection(7L))
+            .isInstanceOf(ServiceConfigInvalidException.class)
+            .hasMessage("连接已被服务引用，禁止删除");
+
+        verify(dsConnectionRepository, never()).markDeleted(any(), any());
+        verify(dsCatalogRepository, never()).markDeleted(any(), any());
+    }
+
+    @Test
+    void shouldTestCurrentConnectionConfigWithExistingPassword() throws Exception {
+        DSConnection existing = buildConnection(7L, "pg_conn", "ENABLED");
+        DSConnection request = buildConnection(null, "pg_conn", "ENABLED");
+        request.setPasswordCiphertext("");
+        DSCatalog catalog = buildCatalog(null, "SCHEMA", "public");
+        when(dsConnectionRepository.findById(7L)).thenReturn(existing);
+        mockDirectConnection();
+        mockExistingCatalogLookup(true);
+
+        connectionManagementService.testConnectionConfig(7L, request, List.of(catalog));
+
+        assertThat(request.getPasswordCiphertext()).isEqualTo("postgres");
+        verify(preparedStatement).setString(1, "public");
+    }
+
+    @Test
+    void shouldRejectMissingCatalogDuringConnectionTest() throws Exception {
+        DSConnection request = buildConnection(null, "pg_conn", "ENABLED");
+        DSCatalog catalog = buildCatalog(null, "SCHEMA", "missing_schema");
+        mockDirectConnection();
+        mockExistingCatalogLookup(false);
+
+        assertThatThrownBy(() -> connectionManagementService.testConnectionConfig(null, request, List.of(catalog)))
+            .isInstanceOf(ServiceConfigInvalidException.class)
+            .hasMessage("连接测试失败: missing_schema, 目标库不存在: missing_schema");
     }
 
     private DSConnection buildConnection(Long id, String code, String status) {
@@ -240,7 +311,6 @@ class ConnectionManagementServiceTest {
         catalog.setId(id);
         catalog.setCatalogType(catalogType);
         catalog.setCatalogValue(catalogValue);
-        catalog.setStatus("ENABLED");
         catalog.setCreatedBy("tester");
         catalog.setUpdatedBy("tester");
         return catalog;

@@ -49,6 +49,7 @@ test.describe('第一阶段前端联调', () => {
     await page.getByRole('menuitem', { name: /数据服务/ }).click()
     await page.waitForLoadState('networkidle')
     await expect(page.getByRole('heading', { name: '数据服务' })).toBeVisible()
+    await page.getByPlaceholder('搜索服务...').fill(draft.definition.serviceCode)
     await expect(page.getByRole('cell', { name: draft.definition.serviceCode, exact: true })).toBeVisible()
 
     await page.getByRole('menuitem', { name: /发布管理/ }).click()
@@ -86,13 +87,13 @@ test.describe('第一阶段前端联调', () => {
       .first()
     await expect(connectionRow).toBeVisible()
 
-    const detailTrigger = page.getByLabel(`查看连接详情 ${connectionCode}`)
+    const detailTrigger = connectionRow.getByLabel('查看连接详情')
     await expect(detailTrigger).toBeVisible()
     await detailTrigger.click()
 
-    const detailDrawer = page.getByRole('dialog', { name: `连接详情 · ${connectionCode}` })
+    const detailDrawer = page.getByRole('dialog', { name: '连接详情' })
     await expect(detailDrawer).toBeVisible()
-    await expect(detailDrawer.getByText(`连接详情 · ${connectionCode}`)).toBeVisible()
+    await expect(detailDrawer.getByText(connectionCode)).toBeVisible()
 
     const viewport = page.viewportSize()
     const listBox = await listCard.boundingBox()
@@ -118,7 +119,7 @@ test.describe('第一阶段前端联调', () => {
       connectionId: connection.connection.id!,
       catalogId: connection.catalogs[0].id!,
       sqlTemplate:
-        "select customer_id as customer_customer_id, 'Y' as customer_demovalue from customer_order where customer_id = :customerId and active = :active",
+        "select customer_id as customer_customer_id, 'Y' as customer_demovalue from customer_order where customer_id = /* customerId */0 and active = /* active */false",
       fields: [
         {
           sourceAlias: 'customer',
@@ -129,7 +130,6 @@ test.describe('第一阶段前端联调', () => {
           sortOrder: 1,
           primaryKey: true,
           joinKey: true,
-          remark: '',
         },
         {
           sourceAlias: 'customer',
@@ -140,7 +140,6 @@ test.describe('第一阶段前端联调', () => {
           sortOrder: 2,
           primaryKey: false,
           joinKey: false,
-          remark: '',
         },
       ],
     })

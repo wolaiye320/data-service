@@ -13,8 +13,6 @@ public class DSSource {
     private String sourceValue;
     private String joinKey;
     private String configJson;
-    private String status;
-    private String remark;
     private Boolean deleted;
     private LocalDateTime createdAt;
     private String createdBy;
@@ -91,22 +89,6 @@ public class DSSource {
 
     public void setConfigJson(String configJson) {
         this.configJson = configJson;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getRemark() {
-        return remark;
-    }
-
-    public void setRemark(String remark) {
-        this.remark = remark;
     }
 
     public Boolean getDeleted() {

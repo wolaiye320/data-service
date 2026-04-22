@@ -54,11 +54,8 @@ class AdminManagementIntegrationTest {
               "connectionConfigJson": "{\\"database\\":\\"data_service\\"}",
               "catalogs": [
                 {
-                  "catalogCode": "public_schema",
-                  "catalogName": "public",
                   "catalogType": "SCHEMA",
-                  "catalogValue": "public",
-                  "status": "ENABLED"
+                  "catalogValue": "public"
                 }
               ]
             }
@@ -100,18 +97,12 @@ class AdminManagementIntegrationTest {
               "connectionConfigJson": "{\\"database\\":\\"data_service\\"}",
               "catalogs": [
                 {
-                  "catalogCode": "public_schema",
-                  "catalogName": "public",
                   "catalogType": "SCHEMA",
-                  "catalogValue": "public",
-                  "status": "ENABLED"
+                  "catalogValue": "public"
                 },
                 {
-                  "catalogCode": "pg_catalog_schema",
-                  "catalogName": "pg_catalog",
                   "catalogType": "SCHEMA",
-                  "catalogValue": "pg_catalog",
-                  "status": "ENABLED"
+                  "catalogValue": "pg_catalog"
                 }
               ]
             }
@@ -190,18 +181,12 @@ class AdminManagementIntegrationTest {
               "connectionConfigJson": "{\\"database\\":\\"data_service\\"}",
               "catalogs": [
                 {
-                  "catalogCode": "public_schema",
-                  "catalogName": "public",
                   "catalogType": "SCHEMA",
-                  "catalogValue": "public",
-                  "status": "ENABLED"
+                  "catalogValue": "public"
                 },
                 {
-                  "catalogCode": "pg_catalog_schema",
-                  "catalogName": "pg_catalog",
                   "catalogType": "SCHEMA",
-                  "catalogValue": "pg_catalog",
-                  "status": "ENABLED"
+                  "catalogValue": "pg_catalog"
                 }
               ]
             }
@@ -226,6 +211,125 @@ class AdminManagementIntegrationTest {
     }
 
     @Test
+    void shouldDeleteConnectionWhenNoServiceReferences() throws Exception {
+        jdbcTemplate.execute("""
+            insert into ds_connection (connection_code, connection_name, db_type, host, port, username, password_ciphertext,
+                                       status, deleted, created_by, updated_by, connection_config_json)
+            values ('delete_conn', 'Delete Conn', 'POSTGRESQL', '127.0.0.1', 5432, 'postgres', 'postgres',
+                    'ENABLED', false, 'tester', 'tester', '{"database":"data_service"}')
+            """);
+        jdbcTemplate.execute("""
+            insert into ds_catalog (connection_id, catalog_type, catalog_value, deleted, created_by, updated_by)
+            values (1, 'SCHEMA', 'public', false, 'tester', 'tester')
+            """);
+
+        mockMvc.perform(delete("/api/admin/connections/1")
+                .header("X-Operator", "admin-a")
+                .header("X-Operator-Role", "ADMIN"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true));
+
+        assertThat(jdbcTemplate.queryForObject(
+            "select deleted from ds_connection where id = 1",
+            Boolean.class
+        )).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+            "select deleted from ds_catalog where id = 1",
+            Boolean.class
+        )).isTrue();
+    }
+
+    @Test
+    void shouldRejectDeletingConnectionReferencedByService() throws Exception {
+        jdbcTemplate.execute("""
+            insert into ds_connection (connection_code, connection_name, db_type, host, port, username, password_ciphertext,
+                                       status, deleted, created_by, updated_by, connection_config_json)
+            values ('delete_blocked_conn', 'Delete Blocked Conn', 'POSTGRESQL', '127.0.0.1', 5432, 'postgres', 'postgres',
+                    'ENABLED', false, 'tester', 'tester', '{"database":"data_service"}')
+            """);
+        jdbcTemplate.execute("""
+            insert into ds_catalog (connection_id, catalog_type, catalog_value, deleted, created_by, updated_by)
+            values (1, 'SCHEMA', 'public', false, 'tester', 'tester')
+            """);
+        jdbcTemplate.execute("""
+            insert into ds_service (service_code, service_name, service_type, status, sql_template, sql_type, execution_mode,
+                                    plan_status, current_sql_version, version, max_batch_size, max_result_rows,
+                                    query_timeout_seconds, federated_query_timeout_seconds, remark, deleted, created_by, updated_by)
+            values ('ref_service', 'Referenced Service', 'SIMPLE_QUERY', 'DRAFT',
+                    'select 1', 'SIMPLE_SQL', 'REMOTE_ONLY', 'UNPLANNED', 0, 0, 20, 200, 20, 40, '', false, 'tester', 'tester')
+            """);
+        jdbcTemplate.execute("""
+            insert into ds_source (service_id, connection_id, catalog_id, source_alias, source_type, source_value,
+                                   join_key, config_json, deleted, created_by, updated_by)
+            values (1, 1, 1, 'customer', 'TABLE', 'customer_order', '', '', false, 'tester', 'tester')
+            """);
+
+        mockMvc.perform(delete("/api/admin/connections/1")
+                .header("X-Operator", "admin-a")
+                .header("X-Operator-Role", "ADMIN"))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value("连接已被服务引用，禁止删除"));
+    }
+
+    @Test
+    void shouldTestUnsavedConnectionConfig() throws Exception {
+        mockMvc.perform(post("/api/admin/connections/test")
+                .header("X-Operator", "admin-a")
+                .header("X-Operator-Role", "ADMIN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "connectionCode": "test_conn",
+                      "connectionName": "Test Conn",
+                      "dbType": "POSTGRESQL",
+                      "host": "127.0.0.1",
+                      "port": 5432,
+                      "username": "postgres",
+                      "passwordCiphertext": "postgres",
+                      "status": "ENABLED",
+                      "connectionConfigJson": "{\\\"database\\\":\\\"data_service\\\"}",
+                      "catalogs": [
+                        {
+                          "catalogType": "SCHEMA",
+                          "catalogValue": "public"
+                        }
+                      ]
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void shouldRejectUnsavedConnectionTestWhenCatalogMissing() throws Exception {
+        mockMvc.perform(post("/api/admin/connections/test")
+                .header("X-Operator", "admin-a")
+                .header("X-Operator-Role", "ADMIN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "connectionCode": "test_conn",
+                      "connectionName": "Test Conn",
+                      "dbType": "POSTGRESQL",
+                      "host": "127.0.0.1",
+                      "port": 5432,
+                      "username": "postgres",
+                      "passwordCiphertext": "postgres",
+                      "status": "ENABLED",
+                      "connectionConfigJson": "{\\\"database\\\":\\\"data_service\\\"}",
+                      "catalogs": [
+                        {
+                          "catalogType": "SCHEMA",
+                          "catalogValue": "missing_schema"
+                        }
+                      ]
+                    }
+                    """))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value("连接测试失败: missing_schema, 目标库不存在: missing_schema"));
+    }
+
+    @Test
     void shouldCreateAndUpdateServiceDraftWithSourcesParamsAndFields() throws Exception {
         jdbcTemplate.execute("""
             insert into ds_connection (connection_code, connection_name, db_type, host, port, username, password_ciphertext,
@@ -234,9 +338,8 @@ class AdminManagementIntegrationTest {
                     'ENABLED', false, 'tester', 'tester', '{"database":"data_service"}')
             """);
         jdbcTemplate.execute("""
-            insert into ds_catalog (connection_id, catalog_code, catalog_name, catalog_type, catalog_value, status,
-                                    deleted, created_by, updated_by)
-            values (1, 'public_schema', 'public', 'SCHEMA', 'public', 'ENABLED', false, 'tester', 'tester')
+            insert into ds_catalog (connection_id, catalog_type, catalog_value, deleted, created_by, updated_by)
+            values (1, 'SCHEMA', 'public', false, 'tester', 'tester')
             """);
 
         String createRequest = """
@@ -254,8 +357,7 @@ class AdminManagementIntegrationTest {
                   "catalogId": 1,
                   "sourceAlias": "customer",
                   "sourceType": "TABLE",
-                  "sourceValue": "customer_order",
-                  "status": "ENABLED"
+                  "sourceValue": "customer_order"
                 }
               ],
               "params": [
@@ -316,8 +418,7 @@ class AdminManagementIntegrationTest {
                   "catalogId": 1,
                   "sourceAlias": "customer",
                   "sourceType": "TABLE",
-                  "sourceValue": "customer_order",
-                  "status": "ENABLED"
+                  "sourceValue": "customer_order"
                 }
               ],
               "params": [
@@ -415,13 +516,13 @@ class AdminManagementIntegrationTest {
             """);
         jdbcTemplate.execute("""
             insert into ds_source (service_id, connection_id, catalog_id, source_alias, source_type, source_value,
-                                   join_key, status, deleted, created_by, updated_by)
-            values (1, 1, null, 'pg_customer', 'TABLE', 'pg_customer', true, 'ENABLED', false, 'tester', 'tester')
+                                   join_key, deleted, created_by, updated_by)
+            values (1, 1, null, 'pg_customer', 'TABLE', 'pg_customer', 'id', false, 'tester', 'tester')
             """);
         jdbcTemplate.execute("""
             insert into ds_source (service_id, connection_id, catalog_id, source_alias, source_type, source_value,
-                                   join_key, status, deleted, created_by, updated_by)
-            values (1, 2, null, 'mysql_order', 'TABLE', 'mysql_order', true, 'ENABLED', false, 'tester', 'tester')
+                                   join_key, deleted, created_by, updated_by)
+            values (1, 2, null, 'mysql_order', 'TABLE', 'mysql_order', 'customer_id', false, 'tester', 'tester')
             """);
         jdbcTemplate.execute("""
             insert into ds_param (service_id, param_name, display_name, param_type, sql_placeholder, required,
@@ -521,9 +622,8 @@ class AdminManagementIntegrationTest {
                     'ENABLED', false, 'tester', 'tester', '{"database":"data_service"}')
             """);
         jdbcTemplate.execute("""
-            insert into ds_catalog (connection_id, catalog_code, catalog_name, catalog_type, catalog_value, status,
-                                    deleted, created_by, updated_by)
-            values (1, 'public_preview', 'public', 'SCHEMA', 'public', 'ENABLED', false, 'tester', 'tester')
+            insert into ds_catalog (connection_id, catalog_type, catalog_value, deleted, created_by, updated_by)
+            values (1, 'SCHEMA', 'public', false, 'tester', 'tester')
             """);
         jdbcTemplate.execute("""
             insert into ds_service (service_code, service_name, service_type, status, sql_template, sql_type,
@@ -533,13 +633,13 @@ class AdminManagementIntegrationTest {
             """);
         jdbcTemplate.execute("""
             insert into ds_source (service_id, connection_id, catalog_id, source_alias, source_type, source_value,
-                                   join_key, status, deleted, created_by, updated_by)
-            values (1, 1, 1, 'fed_customer', 'TABLE', 'fed_customer', 'customer_id', 'ENABLED', false, 'tester', 'tester')
+                                   join_key, deleted, created_by, updated_by)
+            values (1, 1, 1, 'fed_customer', 'TABLE', 'fed_customer', 'customer_id', false, 'tester', 'tester')
             """);
         jdbcTemplate.execute("""
             insert into ds_source (service_id, connection_id, catalog_id, source_alias, source_type, source_value,
-                                   join_key, status, deleted, created_by, updated_by)
-            values (1, 1, 1, 'fed_order', 'TABLE', 'fed_order', 'customer_id', 'ENABLED', false, 'tester', 'tester')
+                                   join_key, deleted, created_by, updated_by)
+            values (1, 1, 1, 'fed_order', 'TABLE', 'fed_order', 'customer_id', false, 'tester', 'tester')
             """);
         jdbcTemplate.execute("""
             insert into ds_param (service_id, param_name, display_name, param_type, sql_placeholder, required,
@@ -592,9 +692,8 @@ class AdminManagementIntegrationTest {
                     'ENABLED', false, 'tester', 'tester', '{"database":"data_service"}')
             """);
         jdbcTemplate.execute("""
-            insert into ds_catalog (connection_id, catalog_code, catalog_name, catalog_type, catalog_value, status,
-                                    deleted, created_by, updated_by)
-            values (1, 'public_schema', 'public', 'SCHEMA', 'public', 'ENABLED', false, 'tester', 'tester')
+            insert into ds_catalog (connection_id, catalog_type, catalog_value, deleted, created_by, updated_by)
+            values (1, 'SCHEMA', 'public', false, 'tester', 'tester')
             """);
 
         mockMvc.perform(post("/api/admin/service-definitions")
@@ -643,9 +742,8 @@ class AdminManagementIntegrationTest {
                     'ENABLED', false, 'tester', 'tester', '{"database":"data_service"}')
             """);
         jdbcTemplate.execute("""
-            insert into ds_catalog (connection_id, catalog_code, catalog_name, catalog_type, catalog_value, status,
-                                    deleted, created_by, updated_by)
-            values (1, 'public_schema', 'public', 'SCHEMA', 'public', 'ENABLED', false, 'tester', 'tester')
+            insert into ds_catalog (connection_id, catalog_type, catalog_value, deleted, created_by, updated_by)
+            values (1, 'SCHEMA', 'public', false, 'tester', 'tester')
             """);
 
         mockMvc.perform(post("/api/admin/service-definitions")
@@ -695,9 +793,8 @@ class AdminManagementIntegrationTest {
                     'ENABLED', false, 'tester', 'tester', '{"database":"data_service"}')
             """);
         jdbcTemplate.execute("""
-            insert into ds_catalog (connection_id, catalog_code, catalog_name, catalog_type, catalog_value, status,
-                                    deleted, created_by, updated_by)
-            values (1, 'public_schema', 'public', 'SCHEMA', 'public', 'ENABLED', false, 'tester', 'tester')
+            insert into ds_catalog (connection_id, catalog_type, catalog_value, deleted, created_by, updated_by)
+            values (1, 'SCHEMA', 'public', false, 'tester', 'tester')
             """);
 
         mockMvc.perform(post("/api/admin/service-definitions")
@@ -759,9 +856,8 @@ class AdminManagementIntegrationTest {
                     'postgres', 'postgres', 'ENABLED', false, 'tester', 'tester', '{"database":"data_service"}')
             """);
         jdbcTemplate.execute("""
-            insert into ds_catalog (connection_id, catalog_code, catalog_name, catalog_type, catalog_value, status,
-                                    deleted, created_by, updated_by)
-            values (1, 'public_preview_create', 'public', 'SCHEMA', 'public', 'ENABLED', false, 'tester', 'tester')
+            insert into ds_catalog (connection_id, catalog_type, catalog_value, deleted, created_by, updated_by)
+            values (1, 'SCHEMA', 'public', false, 'tester', 'tester')
             """);
 
         mockMvc.perform(post("/api/admin/service-definitions")
@@ -791,8 +887,7 @@ class AdminManagementIntegrationTest {
                           "sourceAlias": "pg_customer",
                           "sourceType": "TABLE",
                           "sourceValue": "fed_customer",
-                          "joinKey": "customer_id",
-                          "status": "ENABLED"
+                          "joinKey": "customer_id"
                         },
                         {
                           "connectionId": 1,
@@ -800,8 +895,7 @@ class AdminManagementIntegrationTest {
                           "sourceAlias": "pg_order",
                           "sourceType": "TABLE",
                           "sourceValue": "fed_order",
-                          "joinKey": "customer_id",
-                          "status": "ENABLED"
+                          "joinKey": "customer_id"
                         }
                       ],
                       "params": [
@@ -903,8 +997,7 @@ class AdminManagementIntegrationTest {
                   "catalogId": 1,
                   "sourceAlias": "customer",
                   "sourceType": "TABLE",
-                  "sourceValue": "customer_order",
-                  "status": "ENABLED"
+                  "sourceValue": "customer_order"
                 }
               ],
               "params": [

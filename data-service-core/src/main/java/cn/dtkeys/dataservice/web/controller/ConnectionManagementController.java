@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -75,9 +76,28 @@ public class ConnectionManagementController {
         return ApiResponse.success(connectionManagementService.updateConnectionStatus(id, request.status()));
     }
 
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@PathVariable("id") Long id) {
+        connectionManagementService.deleteConnection(id);
+        return ApiResponse.success(null);
+    }
+
     @PostMapping("/{id}/test")
     public ApiResponse<Void> testConnection(@PathVariable("id") Long id) {
         connectionManagementService.testConnection(id);
+        return ApiResponse.success(null);
+    }
+
+    @PostMapping("/test")
+    public ApiResponse<Void> testConnectionConfig(@Valid @RequestBody ConnectionUpsertRequest request) {
+        connectionManagementService.testConnectionConfig(null, toConnection(request), toCatalogs(request.catalogs()));
+        return ApiResponse.success(null);
+    }
+
+    @PostMapping("/{id}/test-config")
+    public ApiResponse<Void> testConnectionConfig(@PathVariable("id") Long id,
+                                                  @Valid @RequestBody ConnectionUpsertRequest request) {
+        connectionManagementService.testConnectionConfig(id, toConnection(request), toCatalogs(request.catalogs()));
         return ApiResponse.success(null);
     }
 
@@ -116,12 +136,8 @@ public class ConnectionManagementController {
         }
         return requests.stream().map(request -> {
             DSCatalog catalog = new DSCatalog();
-            catalog.setCatalogCode(request.catalogCode());
-            catalog.setCatalogName(request.catalogName());
             catalog.setCatalogType(request.catalogType());
             catalog.setCatalogValue(request.catalogValue());
-            catalog.setStatus(request.status());
-            catalog.setRemark(request.remark());
             return catalog;
         }).toList();
     }

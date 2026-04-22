@@ -44,7 +44,7 @@ export function ActionIconButton({
     return <Tooltip title={label}>{button}</Tooltip>
   }
 
-  return (
+  const confirm = (
     <Popconfirm
       title={confirmTitle}
       okText={confirmOkText}
@@ -54,4 +54,5 @@ export function ActionIconButton({
       {button}
     </Popconfirm>
   )
+  return <Tooltip title={label}>{confirm}</Tooltip>
 }

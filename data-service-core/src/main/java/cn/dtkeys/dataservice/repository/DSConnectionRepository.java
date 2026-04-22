@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Result;
 import org.apache.ibatis.annotations.Results;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -100,4 +101,13 @@ public interface DSConnectionRepository {
         where id = #{id} and deleted = false
         """)
     int update(DSConnection connection);
+
+    @Update("""
+        update ds_connection
+        set deleted = true,
+            updated_by = #{operator},
+            updated_at = current_timestamp
+        where id = #{id} and deleted = false
+        """)
+    int markDeleted(@Param("id") Long id, @Param("operator") String operator);
 }

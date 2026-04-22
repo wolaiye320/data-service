@@ -259,7 +259,6 @@ class FederatedRuntimeQueryExecutorTest {
         source.setSourceAlias(alias);
         source.setSourceValue(sourceValue);
         source.setJoinKey(joinKey);
-        source.setStatus("ENABLED");
 
         DSConnection connection = new DSConnection();
         connection.setDbType(dbType);
@@ -268,7 +267,6 @@ class FederatedRuntimeQueryExecutorTest {
         DSCatalog catalog = new DSCatalog();
         catalog.setCatalogType(catalogType);
         catalog.setCatalogValue(catalogValue);
-        catalog.setStatus("ENABLED");
         return new DataServiceRuntimeSource(source, connection, catalog);
     }
 

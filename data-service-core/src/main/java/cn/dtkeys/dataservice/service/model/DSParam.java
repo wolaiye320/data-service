@@ -13,7 +13,6 @@ public class DSParam {
     private Boolean required;
     private String defaultValue;
     private Integer sortOrder;
-    private String remark;
     private Boolean deleted;
     private LocalDateTime createdAt;
     private String createdBy;
@@ -90,14 +89,6 @@ public class DSParam {
 
     public void setSortOrder(Integer sortOrder) {
         this.sortOrder = sortOrder;
-    }
-
-    public String getRemark() {
-        return remark;
-    }
-
-    public void setRemark(String remark) {
-        this.remark = remark;
     }
 
     public Boolean getDeleted() {

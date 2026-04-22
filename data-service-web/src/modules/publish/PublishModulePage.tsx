@@ -112,7 +112,7 @@ export function PublishModulePage() {
             {record.status === 'DRAFT' ? (
               <ActionIconButton
                 icon={<RocketOutlined />}
-                label={`发布服务 ${record.serviceCode}`}
+                label="发布服务"
                 loading={actionLoading === record.id}
                 onClick={() => void handlePublish(record.id)}
               />
@@ -120,7 +120,7 @@ export function PublishModulePage() {
             {record.status === 'PUBLISHED' ? (
               <ActionIconButton
                 icon={<StopOutlined />}
-                label={`停用服务 ${record.serviceCode}`}
+                label="停用服务"
                 confirmTitle="确认停用该服务？"
                 onClick={() => void handleDisable(record.id)}
               />

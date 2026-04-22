@@ -10,8 +10,6 @@ public record SourceUpsertRequest(
     @NotBlank(message = "sourceType 不能为空") String sourceType,
     @NotBlank(message = "sourceValue 不能为空") String sourceValue,
     String joinKey,
-    String configJson,
-    String status,
-    String remark
+    String configJson
 ) {
 }

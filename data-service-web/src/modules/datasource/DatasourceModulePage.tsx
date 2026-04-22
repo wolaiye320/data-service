@@ -18,14 +18,12 @@ import {
   EditOutlined,
   EyeOutlined,
   PlayCircleOutlined,
-  PauseCircleOutlined,
-  CheckCircleOutlined,
   DeleteOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { ActionIconButton } from '../../components/ActionIconButton'
 import { useAppFeedback } from '../../components/useAppFeedback'
-import { getJson, postJson, putJson, resolveErrorMessage } from '../../services/http'
+import { deleteJson, getJson, postJson, putJson, resolveErrorMessage } from '../../services/http'
 import type { CatalogItem, ConnectionDetail, ConnectionItem, ConnectionUpsertPayload } from '../../types/admin'
 
 const DEFAULT_CONNECTION: ConnectionUpsertPayload = {
@@ -73,36 +71,46 @@ function getCatalogRule(dbType?: string) {
   return CATALOG_RULES[dbType ?? 'POSTGRESQL'] ?? CATALOG_RULES.POSTGRESQL
 }
 
+function getCatalogTypeOptions(dbType?: string) {
+  const normalizedDbType = (dbType ?? 'POSTGRESQL').trim().toUpperCase()
+  if (normalizedDbType === 'MYSQL') {
+    return [{ label: 'DATABASE', value: 'DATABASE' }]
+  }
+  if (normalizedDbType === 'ORACLE') {
+    return [
+      { label: 'DATABASE', value: 'DATABASE' },
+      { label: 'SCHEMA', value: 'SCHEMA' },
+    ]
+  }
+  return [{ label: 'SCHEMA', value: 'SCHEMA' }]
+}
+
+function normalizeCatalogTypeForDb(dbType?: string, catalogType?: string) {
+  const normalizedType = catalogType?.trim().toUpperCase()
+  const allowedTypes = getCatalogTypeOptions(dbType).map((option) => option.value)
+  if (normalizedType && allowedTypes.includes(normalizedType)) {
+    return normalizedType
+  }
+  return allowedTypes[0] ?? normalizedType ?? ''
+}
+
 function buildCatalogDraft(dbType?: string): CatalogItem {
-  const rule = getCatalogRule(dbType)
   return {
-    catalogCode: '',
-    catalogName: '',
-    catalogType: rule.defaultType,
+    catalogType: normalizeCatalogTypeForDb(dbType),
     catalogValue: '',
-    status: 'ENABLED',
-    remark: '',
   }
 }
 
-function normalizeCatalogCode(value?: string) {
-  const normalized = (value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
-  return normalized || 'catalog'
-}
-
 function normalizeCatalogPayload(values: ConnectionUpsertPayload): ConnectionUpsertPayload {
-  const rule = getCatalogRule(values.dbType)
   return {
     ...values,
     catalogs: (values.catalogs ?? []).map((catalog) => {
       const catalogValue = catalog.catalogValue?.trim() ?? ''
+      const catalogType = normalizeCatalogTypeForDb(values.dbType, catalog.catalogType)
       return {
         ...catalog,
-        catalogType: rule.defaultType,
+        catalogType,
         catalogValue,
-        catalogCode: catalog.catalogCode?.trim() || normalizeCatalogCode(catalogValue),
-        catalogName: catalog.catalogName?.trim() || catalogValue,
-        status: catalog.status ?? 'ENABLED',
       }
     }),
   }
@@ -122,6 +130,7 @@ export function DatasourceModulePage() {
   const { message } = useAppFeedback()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [testingForm, setTestingForm] = useState(false)
   const [submittingAction, setSubmittingAction] = useState<number | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
@@ -130,6 +139,8 @@ export function DatasourceModulePage() {
   const [detail, setDetail] = useState<ConnectionDetail | null>(null)
   const [editingConnection, setEditingConnection] = useState<ConnectionItem | null>(null)
   const [form] = Form.useForm<ConnectionUpsertPayload>()
+  const currentDbType = Form.useWatch('dbType', form) ?? DEFAULT_CONNECTION.dbType
+  const currentCatalogs = Form.useWatch('catalogs', form) ?? []
 
   async function loadConnections(nextSelectedId?: number | null) {
     setLoading(true)
@@ -197,25 +208,26 @@ export function DatasourceModulePage() {
           <Space size={4}>
             <ActionIconButton
               icon={<EyeOutlined />}
-              label={`查看连接详情 ${record.connectionCode}`}
+              label="查看连接详情"
               onClick={() => void openDetail(record.id ?? null)}
             />
             <ActionIconButton
               icon={<EditOutlined />}
-              label={`编辑连接 ${record.connectionCode}`}
+              label="编辑连接"
               onClick={() => openEdit(record.id ?? null)}
             />
             <ActionIconButton
               icon={<PlayCircleOutlined />}
-              label={`测试连接 ${record.connectionCode}`}
+              label="测试连接"
               loading={submittingAction === record.id}
               onClick={() => void handleTest(record.id)}
             />
             <ActionIconButton
-              icon={record.status === 'ENABLED' ? <PauseCircleOutlined /> : <CheckCircleOutlined />}
-              label={`${record.status === 'ENABLED' ? '停用' : '启用'}连接 ${record.connectionCode}`}
-              confirmTitle={record.status === 'ENABLED' ? '确认停用该连接？' : '确认启用该连接？'}
-              onClick={() => void handleStatus(record.id, record.status === 'ENABLED' ? 'DISABLED' : 'ENABLED')}
+              icon={<DeleteOutlined />}
+              label="删除连接"
+              danger
+              confirmTitle="确认删除该连接？"
+              onClick={() => void handleDelete(record.id)}
             />
           </Space>
         ),
@@ -256,12 +268,9 @@ export function DatasourceModulePage() {
       remark: nextDetail.connection.remark ?? '',
       connectionConfigJson: nextDetail.connection.connectionConfigJson ?? '',
       catalogs: nextDetail.catalogs.map((catalog) => ({
-        catalogCode: catalog.catalogCode,
-        catalogName: catalog.catalogName,
+        id: catalog.id,
         catalogType: catalog.catalogType,
         catalogValue: catalog.catalogValue,
-        status: catalog.status ?? 'ENABLED',
-        remark: catalog.remark ?? '',
       })),
     })
     setDrawerOpen(true)
@@ -307,16 +316,36 @@ export function DatasourceModulePage() {
     }
   }
 
-  async function handleStatus(id: number | undefined, status: string) {
+  async function handleTestForm() {
+    setTestingForm(true)
+    try {
+      const values = await form.validateFields()
+      const payload = normalizeCatalogPayload(values)
+      const url = editingConnection?.id
+        ? `/api/admin/connections/${editingConnection.id}/test-config`
+        : '/api/admin/connections/test'
+      await postJson<null, ConnectionUpsertPayload>(url, payload)
+      message.success('连接校验通过，目标库均真实存在')
+    } catch (error) {
+      message.error(resolveErrorMessage(error))
+    } finally {
+      setTestingForm(false)
+    }
+  }
+
+  async function handleDelete(id: number | undefined) {
     if (!id) {
       return
     }
     setSubmittingAction(id)
     try {
-      await putJson<ConnectionDetail, { status: string }>(`/api/admin/connections/${id}/status`, { status })
-      message.success(status === 'ENABLED' ? '连接已启用' : '连接已停用')
-      await loadConnections(id)
-      await loadDetail(id)
+      await deleteJson<null>(`/api/admin/connections/${id}`)
+      if (selectedId === id) {
+        setDetailDrawerOpen(false)
+        setDetail(null)
+      }
+      message.success('连接已删除')
+      await loadConnections(null)
     } catch (error) {
       message.error(resolveErrorMessage(error))
     } finally {
@@ -358,7 +387,7 @@ export function DatasourceModulePage() {
       </div>
 
       <Drawer
-        title={detail ? `连接详情 · ${detail.connection.connectionCode}` : '连接详情'}
+        title="连接详情"
         width={640}
         open={detailDrawerOpen}
         onClose={() => setDetailDrawerOpen(false)}
@@ -387,21 +416,14 @@ export function DatasourceModulePage() {
             <div>
               <Typography.Title level={5}>目标库列表</Typography.Title>
               <Table<CatalogItem>
-                rowKey={(record) => `${record.catalogCode}-${record.catalogValue}`}
+                rowKey={(record) => String(record.id ?? `${record.catalogType}-${record.catalogValue}`)}
                 size="small"
                 pagination={false}
                 dataSource={detail.catalogs}
                 locale={{ emptyText: '当前连接未配置目标库' }}
                 columns={[
-                  { title: '编码', dataIndex: 'catalogCode' },
-                  { title: '名称', dataIndex: 'catalogName' },
+                  { title: '目标库名称', dataIndex: 'catalogValue' },
                   { title: '类型', dataIndex: 'catalogType' },
-                  { title: '值', dataIndex: 'catalogValue' },
-                  {
-                    title: '状态',
-                    dataIndex: 'status',
-                    render: (value: string | undefined) => renderStatusText(value ?? 'ENABLED'),
-                  },
                 ]}
               />
             </div>
@@ -410,13 +432,16 @@ export function DatasourceModulePage() {
       </Drawer>
 
       <Drawer
-        title={editingConnection ? `编辑连接 · ${editingConnection.connectionCode}` : '新建连接'}
+        title={editingConnection ? '编辑连接' : '新建连接'}
         width={720}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         destroyOnHidden
         extra={
           <Space>
+            <Button loading={testingForm} onClick={() => void handleTestForm()}>
+              测试连接
+            </Button>
             <Button onClick={() => setDrawerOpen(false)}>取消</Button>
             <Button type="primary" loading={saving} onClick={() => void form.submit()}>
               保存
@@ -452,7 +477,7 @@ export function DatasourceModulePage() {
                     'catalogs',
                     catalogs.map((catalog: CatalogItem) => ({
                       ...catalog,
-                      catalogType: getCatalogRule(value).defaultType,
+                      catalogType: normalizeCatalogTypeForDb(value, catalog.catalogType),
                     })),
                   )
                 }}
@@ -494,72 +519,98 @@ export function DatasourceModulePage() {
 
           <Form.List name="catalogs">
             {(fields, { add, remove }) => (
-              <Form.Item noStyle shouldUpdate={(prev, next) => prev.dbType !== next.dbType}>
-                {() => {
-                  const rule = getCatalogRule(form.getFieldValue('dbType'))
-                  return (
-                    <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                      <div className="section-header">
-                        <Typography.Title level={5}>目标库</Typography.Title>
-                        <Button size="small" onClick={() => add(buildCatalogDraft(form.getFieldValue('dbType')))}>
-                          新增目标库
-                        </Button>
-                      </div>
-                      {fields.length === 0 ? <Alert type="info" showIcon message={rule.emptyText} /> : null}
-                      {fields.map((field) => (
-                        <Card
-                          key={field.key}
-                          size="small"
-                          title={`目标库 #${field.name + 1}`}
-                          extra={
-                            <ActionIconButton
-                              icon={<DeleteOutlined />}
-                              label={`删除目标库 ${field.name + 1}`}
-                              danger
-                              onClick={() => remove(field.name)}
-                            />
-                          }
-                        >
-                          <div className="form-grid form-grid-two">
-                            <Form.Item
-                              label={rule.valueLabel}
-                              name={[field.name, 'catalogValue']}
-                              rules={[{ required: true, message: `请输入${rule.valueLabel}` }]}
-                            >
-                              <Input size="small" placeholder={rule.placeholder} />
-                            </Form.Item>
-                            <Form.Item label="状态" name={[field.name, 'status']}>
-                              <Select
-                                size="small"
-                                options={[
-                                  { label: '已启用', value: 'ENABLED' },
-                                  { label: '已停用', value: 'DISABLED' },
-                                ]}
-                              />
-                            </Form.Item>
-                            <Form.Item noStyle shouldUpdate>
-                              {() => {
-                                const catalogValue = form.getFieldValue(['catalogs', field.name, 'catalogValue'])
-                                const catalogCode = normalizeCatalogCode(catalogValue)
-                                return (
-                                  <Alert
-                                    type="info"
-                                    showIcon
-                                    message={`将自动生成编码 ${catalogCode}，类型 ${rule.defaultType}`}
-                                  />
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                <div className="section-header">
+                  <Typography.Title level={5}>目标库</Typography.Title>
+                  <Button size="small" onClick={() => add(buildCatalogDraft(currentDbType))}>
+                    新增目标库
+                  </Button>
+                </div>
+                <Table<{ key: number | string; name: number }>
+                  className="catalog-edit-table"
+                  size="small"
+                  pagination={false}
+                  dataSource={fields.map((field) => ({
+                    key: currentCatalogs[field.name]?.id ?? field.key,
+                    name: field.name,
+                  }))}
+                  rowKey="key"
+                  locale={{ emptyText: getCatalogRule(currentDbType).emptyText }}
+                  columns={[
+                    {
+                      title: '目标库名称',
+                      key: 'catalogValue',
+                      width: '60%',
+                      render: (_, row) => (
+                        <Form.Item
+                          name={[row.name, 'catalogValue']}
+                          rules={[
+                            { required: true, message: '请输入目标库名称' },
+                            {
+                              validator: async (_, value) => {
+                                const trimmedValue = value?.trim()
+                                if (!trimmedValue) {
+                                  return
+                                }
+                                const currentType = normalizeCatalogTypeForDb(
+                                  currentDbType,
+                                  form.getFieldValue(['catalogs', row.name, 'catalogType']),
                                 )
-                              }}
-                            </Form.Item>
-                            <Form.Item label="备注" name={[field.name, 'remark']}>
-                              <Input size="small" />
-                            </Form.Item>
-                          </div>
-                        </Card>
-                      ))}
-                    </Space>
-                  )
-                }}
-              </Form.Item>
+                                const duplicated = currentCatalogs.some((catalog, index) => {
+                                  if (index === row.name) {
+                                    return false
+                                  }
+                                  return (
+                                    catalog?.catalogValue?.trim().toLowerCase() === trimmedValue.toLowerCase()
+                                    && normalizeCatalogTypeForDb(currentDbType, catalog?.catalogType) === currentType
+                                  )
+                                })
+                                if (duplicated) {
+                                  throw new Error('同一连接下目标库名称不可重复')
+                                }
+                              },
+                            },
+                          ]}
+                        >
+                          <Input size="small" placeholder={getCatalogRule(currentDbType).placeholder} />
+                        </Form.Item>
+                      ),
+                    },
+                    {
+                      title: '库类型',
+                      key: 'catalogType',
+                      width: 180,
+                      render: (_, row) => (
+                        <Form.Item
+                          name={[row.name, 'catalogType']}
+                          initialValue={normalizeCatalogTypeForDb(currentDbType)}
+                          rules={[{ required: true, message: '请选择库类型' }]}
+                        >
+                          <Select
+                            size="small"
+                            options={getCatalogTypeOptions(currentDbType)}
+                            onChange={() => void form.validateFields([['catalogs', row.name, 'catalogValue']])}
+                          />
+                        </Form.Item>
+                      ),
+                    },
+                    {
+                      title: '操作',
+                      key: 'actions',
+                      width: 88,
+                      align: 'center',
+                      render: (_, row) => (
+                        <ActionIconButton
+                          icon={<DeleteOutlined />}
+                          label={`删除目标库第 ${row.name + 1} 行`}
+                          danger
+                          onClick={() => remove(row.name)}
+                        />
+                      ),
+                    },
+                  ]}
+                />
+              </Space>
             )}
           </Form.List>
         </Form>

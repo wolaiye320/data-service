@@ -18,10 +18,10 @@ public interface DSSourceRepository {
     @Insert("""
         insert into ds_source (
             service_id, connection_id, catalog_id, source_alias, source_type, source_value, join_key, config_json,
-            status, remark, deleted, created_by, updated_by
+            deleted, created_by, updated_by
         ) values (
             #{serviceId}, #{connectionId}, #{catalogId}, #{sourceAlias}, #{sourceType}, #{sourceValue}, #{joinKey},
-            #{configJson}, #{status}, #{remark}, #{deleted}, #{createdBy}, #{updatedBy}
+            #{configJson}, #{deleted}, #{createdBy}, #{updatedBy}
         )
         """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
@@ -29,7 +29,7 @@ public interface DSSourceRepository {
 
     @Select("""
         select id, service_id, connection_id, catalog_id, source_alias, source_type, source_value, join_key,
-               config_json, status, remark, deleted, created_at, created_by, updated_at, updated_by
+               config_json, deleted, created_at, created_by, updated_at, updated_by
         from ds_source
         where service_id = #{serviceId} and deleted = false
         order by id
@@ -66,6 +66,14 @@ public interface DSSourceRepository {
           and svc.status = 'PUBLISHED'
         """)
     long countPublishedReferencesByConnectionId(Long connectionId);
+
+    @Select("""
+        select count(1)
+        from ds_source
+        where connection_id = #{connectionId}
+          and deleted = false
+        """)
+    long countReferencesByConnectionId(Long connectionId);
 
     @Select("""
         select count(1)

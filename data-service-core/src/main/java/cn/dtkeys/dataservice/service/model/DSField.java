@@ -14,7 +14,6 @@ public class DSField {
     private Integer sortOrder;
     private Boolean primaryKey;
     private Boolean joinKey;
-    private String remark;
     private Boolean deleted;
     private LocalDateTime createdAt;
     private String createdBy;
@@ -99,14 +98,6 @@ public class DSField {
 
     public void setJoinKey(Boolean joinKey) {
         this.joinKey = joinKey;
-    }
-
-    public String getRemark() {
-        return remark;
-    }
-
-    public void setRemark(String remark) {
-        this.remark = remark;
     }
 
     public Boolean getDeleted() {

@@ -530,6 +530,14 @@ body {
   margin: 0;
 }
 
+.catalog-edit-table .ant-form-item {
+  margin-bottom: 0;
+}
+
+.catalog-edit-table .ant-table-tbody .ant-table-cell {
+  vertical-align: top;
+}
+
 /* 详情双栏 */
 .detail-split-grid {
   display: grid;

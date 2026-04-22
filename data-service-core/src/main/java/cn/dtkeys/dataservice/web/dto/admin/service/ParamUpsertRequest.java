@@ -10,7 +10,6 @@ public record ParamUpsertRequest(
     @NotBlank(message = "sqlPlaceholder 不能为空") String sqlPlaceholder,
     Boolean required,
     String defaultValue,
-    @NotNull(message = "sortOrder 不能为空") Integer sortOrder,
-    String remark
+    @NotNull(message = "sortOrder 不能为空") Integer sortOrder
 ) {
 }
