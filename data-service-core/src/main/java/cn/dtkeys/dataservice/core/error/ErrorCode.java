@@ -1,0 +1,12 @@
+package cn.dtkeys.dataservice.core.error;
+
+public enum ErrorCode {
+    INVALID_ARGUMENT,
+    ACCESS_DENIED,
+    RESOURCE_NOT_FOUND,
+    RESOURCE_CONFLICT,
+    DATASOURCE_CONNECTION_TEST_FAILED,
+    DATASOURCE_DISABLED_IN_USE,
+    SERVICE_DRAFT_NOT_FOUND,
+    INTERNAL_ERROR
+}
