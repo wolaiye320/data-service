@@ -164,12 +164,6 @@ export default function ConnectionsPage() {
         render: (value: ConnectionStatus) => (value === 'ENABLED' ? '启用' : '停用'),
       },
       {
-        title: '更新时间',
-        dataIndex: 'updatedAt',
-        width: 170,
-        render: formatDateTime,
-      },
-      {
         title: '操作',
         key: 'action',
         fixed: 'right',

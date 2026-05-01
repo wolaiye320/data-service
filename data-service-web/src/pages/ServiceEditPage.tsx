@@ -1,5 +1,5 @@
-import { ArrowLeftOutlined, PlayCircleOutlined, SaveOutlined, ThunderboltOutlined, HistoryOutlined, SettingOutlined, DatabaseOutlined, CheckCircleOutlined, CloseCircleOutlined, CodeOutlined, FileTextOutlined, SafetyOutlined } from '@ant-design/icons'
-import { Alert, App, Badge, Button, Card, Collapse, Descriptions, Empty, Form, Input, InputNumber, Select, Space, Table, Tabs, Tag, Tooltip, Typography, theme } from 'antd'
+import { ArrowLeftOutlined, PlayCircleOutlined, SaveOutlined, ThunderboltOutlined, HistoryOutlined, SettingOutlined, DatabaseOutlined, CheckCircleOutlined, CloseCircleOutlined, CodeOutlined, FileTextOutlined, SafetyOutlined, QuestionCircleOutlined } from '@ant-design/icons'
+import { Alert, App, Badge, Button, Card, Collapse, Descriptions, Empty, Form, Input, InputNumber, Popover, Select, Space, Table, Tabs, Tag, Tooltip, Typography, theme } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { listConnections, type ConnectionDetail } from '../api/connections'
@@ -86,6 +86,30 @@ const paramTypeOptions = [
 
 const sensitiveKeyPattern = /(password|passwd|pwd|secret|token|accessKey|privateKey|credential|身份证|手机号|phone|mobile|email|邮箱)/i
 
+const sqlHelpContent = (
+  <Space direction="vertical" size={4} className="sql-help-content">
+    <Typography.Text>
+      参数占位符：
+      <span className="sql-help-inline-code">where id = /* orderId */1</span>
+    </Typography.Text>
+    <Typography.Text>
+      条件块：
+      <span className="sql-help-inline-code">/*%if orderId != null */ and id = /* orderId */1 /*%end*/</span>
+    </Typography.Text>
+    <Typography.Text>
+      集合参数：
+      <span className="sql-help-inline-code">where id in /* orderIds */(1,2)</span>
+    </Typography.Text>
+    <Typography.Text type="warning">
+      普通说明性注释请使用 <span className="sql-help-inline-code">-- 注释</span>，不要写
+      <span className="sql-help-inline-code">/* 普通注释 */</span>。
+    </Typography.Text>
+    <Typography.Text type="secondary">
+      <span className="sql-help-inline-code">/* */</span> 仅保留给 Doma 模板语法，否则会被当作参数或指令解析。
+    </Typography.Text>
+  </Space>
+)
+
 function errorMessage(error: unknown) {
   if (error instanceof ApiRequestError) {
     return error.traceId ? `${error.message}（traceId: ${error.traceId}）` : error.message
@@ -159,6 +183,62 @@ function toParamDefinitions(paramSnapshotJson?: string): ParamDefinitionFormValu
       paramType: item.paramType && item.paramType !== 'UNKNOWN' ? item.paramType : undefined,
       defaultValue: item.defaultValue ?? undefined,
     }))
+}
+
+function toServiceFormValues(detail: ServiceDetail): Partial<ServicePayload> & {
+  serviceCode?: string
+  serviceName: string
+  remark?: string
+  paramDefinitions: ParamDefinitionFormValue[]
+} {
+  return {
+    serviceCode: detail.serviceCode,
+    serviceName: detail.serviceName,
+    sqlType: detail.sqlType,
+    defaultConnectionCode: detail.defaultConnectionCode,
+    sqlText: detail.draftVersion?.sqlText ?? '',
+    maxBatchSize: detail.maxBatchSize,
+    maxResultRows: detail.maxResultRows,
+    queryTimeoutSeconds: detail.queryTimeoutSeconds,
+    federatedQueryTimeoutSeconds: detail.federatedQueryTimeoutSeconds,
+    paramDefinitions: toParamDefinitions(detail.draftVersion?.paramSnapshotJson),
+    remark: detail.remark,
+  }
+}
+
+function buildServicePayload(formValues: Partial<ServiceFormValue>, detail?: ServiceDetail): ServicePayload {
+  return {
+    serviceCode: formValues.serviceCode,
+    serviceName: formValues.serviceName ?? detail?.serviceName ?? '',
+    sqlType: formValues.sqlType ?? detail?.sqlType ?? 'SIMPLE_SQL',
+    defaultConnectionCode: formValues.defaultConnectionCode ?? detail?.defaultConnectionCode,
+    sqlText: formValues.sqlText ?? detail?.draftVersion?.sqlText ?? '',
+    paramDefinitions:
+      (formValues.paramDefinitions as ParamDefinitionFormValue[] | undefined)
+      ?? (detail ? toParamDefinitions(detail.draftVersion?.paramSnapshotJson) : undefined),
+    maxBatchSize: formValues.maxBatchSize ?? detail?.maxBatchSize,
+    maxResultRows: formValues.maxResultRows ?? detail?.maxResultRows,
+    queryTimeoutSeconds: formValues.queryTimeoutSeconds ?? detail?.queryTimeoutSeconds,
+    federatedQueryTimeoutSeconds:
+      formValues.federatedQueryTimeoutSeconds ?? detail?.federatedQueryTimeoutSeconds,
+    remark: formValues.remark ?? detail?.remark,
+  }
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function replaceSqlParamDefaultValue(sqlText: string, paramName: string, nextDefaultValue?: string) {
+  if (!sqlText || !paramName) {
+    return sqlText
+  }
+  const pattern = new RegExp(
+    `(/\\*\\s*${escapeRegExp(paramName)}\\s*\\*/)(?:\\s*(?:'(?:''|[^'])*'|"(?:[^"]|"")*"|\\btrue\\b|\\bfalse\\b|\\bnull\\b|-?\\d+(?:\\.\\d+)?|[^\\s,);]+))?`,
+    'gim',
+  )
+  const replacementValue = nextDefaultValue ?? ''
+  return sqlText.replace(pattern, (_, placeholder: string) => `${placeholder}${replacementValue}`)
 }
 
 function parseJsonObject(text?: string) {
@@ -493,6 +573,7 @@ export default function ServiceEditPageOptimized() {
       setCachePolicy(undefined)
       form.setFieldsValue({
         sqlType: 'SIMPLE_SQL',
+        sqlText: 'select id as order_id, order_name, created_at\nfrom public.orders\nwhere id = /* id */1',
         maxBatchSize: 100,
         maxResultRows: 1000,
         queryTimeoutSeconds: 30,
@@ -512,19 +593,7 @@ export default function ServiceEditPageOptimized() {
           return
         }
         setService(found)
-        form.setFieldsValue({
-          serviceCode: found.serviceCode,
-          serviceName: found.serviceName,
-          sqlType: found.sqlType,
-          defaultConnectionCode: found.defaultConnectionCode,
-          sqlText: found.draftVersion?.sqlText ?? '',
-          maxBatchSize: found.maxBatchSize,
-          maxResultRows: found.maxResultRows,
-          queryTimeoutSeconds: found.queryTimeoutSeconds,
-          federatedQueryTimeoutSeconds: found.federatedQueryTimeoutSeconds,
-          paramDefinitions: toParamDefinitions(found.draftVersion?.paramSnapshotJson),
-          remark: found.remark,
-        })
+        form.setFieldsValue(toServiceFormValues(found))
       })
       .catch((err) => {
         setLoadError(errorMessage(err))
@@ -561,7 +630,8 @@ export default function ServiceEditPageOptimized() {
     if (!service && !isNew) {
       return
     }
-    const values = await form.validateFields()
+    await form.validateFields()
+    const values = buildServicePayload(form.getFieldsValue(true) as Partial<ServiceFormValue>, service)
     setSaving(true)
     try {
       if (!isNew && service) {
@@ -584,10 +654,12 @@ export default function ServiceEditPageOptimized() {
       message.warning('请先保存草稿后再预览')
       return
     }
+    await form.validateFields()
+    const values = buildServicePayload(form.getFieldsValue(true) as Partial<ServiceFormValue>, service)
     // 收集所有参数的默认值
-    const paramDefinitions = form.getFieldValue('paramDefinitions') || []
+    const paramDefinitions = (values.paramDefinitions as ParamDefinitionFormValue[] | undefined) ?? []
     const previewParams: Record<string, string> = {}
-    paramDefinitions.forEach((def: { paramName: string; defaultValue?: string }) => {
+    paramDefinitions.forEach((def) => {
       if (def.defaultValue) {
         previewParams[def.paramName] = def.defaultValue
       }
@@ -597,11 +669,27 @@ export default function ServiceEditPageOptimized() {
     setPreviewResult(undefined)
     setPreviewError(undefined)
     try {
-      const result = await previewService(service.id, {
+      const updatedService = await updateService(service.id, values)
+      setService(updatedService)
+      form.setFieldsValue(toServiceFormValues(updatedService))
+
+      const result = await previewService(updatedService.id, {
         previewParams,
         requestContext: {},
       })
       setPreviewResult(result)
+      setService((current) => {
+        if (!current || current.id !== updatedService.id || !current.draftVersion) {
+          return updatedService
+        }
+        return {
+          ...current,
+          draftVersion: {
+            ...current.draftVersion,
+            planSnapshotJson: result.planSnapshotJson ?? current.draftVersion.planSnapshotJson,
+          },
+        }
+      })
       message.success('预览执行完成')
     } catch (err) {
       const detail = errorMessage(err)
@@ -637,6 +725,18 @@ export default function ServiceEditPageOptimized() {
       setCachePolicySaving(false)
     }
   }
+
+  const handleParamDefaultValueChange = useCallback((paramIndex: number, nextDefaultValue: string) => {
+    const paramName = form.getFieldValue(['paramDefinitions', paramIndex, 'paramName'])
+    if (!paramName) {
+      return
+    }
+    const currentSqlText = form.getFieldValue('sqlText') ?? ''
+    const nextSqlText = replaceSqlParamDefaultValue(currentSqlText, paramName, nextDefaultValue)
+    if (nextSqlText !== currentSqlText) {
+      form.setFieldValue('sqlText', nextSqlText)
+    }
+  }, [form])
 
   const handleBack = useCallback(() => {
     navigate('/services')
@@ -714,11 +814,31 @@ export default function ServiceEditPageOptimized() {
               </div>
               <Form.Item
                 name="sqlText"
-                label="SQL 文本"
+                label={(
+                  <span className="sql-help-label">
+                    <span>SQL 文本</span>
+                    <Popover
+                      trigger="click"
+                      title="SQL 编写说明"
+                      content={sqlHelpContent}
+                      overlayClassName="sql-help-popover"
+                    >
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<QuestionCircleOutlined />}
+                        className="sql-help-trigger"
+                        data-testid="sql-help-trigger"
+                        aria-label="SQL 编写说明"
+                        onClick={(event) => event.preventDefault()}
+                      />
+                    </Popover>
+                  </span>
+                )}
                 rules={[{ required: true, message: '请输入 SQL 文本' }]}
               >
                 <SqlCodeEditor
-                  rows={8}
+                  rows={6}
                   placeholder="select ... from schema.table where id = /* id */0"
                   className="sql-editor"
                 />
@@ -789,7 +909,11 @@ export default function ServiceEditPageOptimized() {
                                 name={[record.field.name, 'defaultValue']}
                                 style={{ marginBottom: 0 }}
                               >
-                                <Input placeholder="输入默认值" style={{ width: 130 }} />
+                                <Input
+                                  placeholder="输入默认值"
+                                  style={{ width: 130 }}
+                                  onChange={(event) => handleParamDefaultValueChange(record.field.name, event.target.value)}
+                                />
                               </Form.Item>
                             ),
                           },

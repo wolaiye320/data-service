@@ -229,6 +229,40 @@ body {
   padding: 12px;
 }
 
+.sql-help-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sql-help-trigger {
+  height: auto;
+  padding: 0;
+}
+
+.sql-help-popover .ant-popover-inner {
+  max-width: 680px;
+}
+
+.sql-help-popover .ant-popover-inner-content {
+  padding-top: 4px;
+}
+
+.sql-help-content {
+  width: 100%;
+}
+
+.sql-help-inline-code {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #f5f5f5;
+  color: #262626;
+  font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12px;
+  line-height: 20px;
+}
+
 .audit-filter-form {
   margin-bottom: 16px;
 }
@@ -468,7 +502,7 @@ body {
   margin: 0;
   padding: 12px 14px;
   width: 100%;
-  min-height: 208px;
+  min-height: 160px;
   font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
   font-size: 13px;
   line-height: 1.6;

@@ -17,10 +17,6 @@
     <dependencies>
         <dependency>
             <groupId>cn.dtkeys</groupId>
-            <artifactId>data-service-common</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>cn.dtkeys</groupId>
             <artifactId>data-service-core</artifactId>
         </dependency>
         <dependency>

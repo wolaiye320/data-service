@@ -8,9 +8,15 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * 校验正式查询的批量输入规模。
+ */
 @Service
 public class QueryBatchGuardService {
 
+    /**
+     * 根据服务配置校验批量输入数量。
+     */
     public void validate(DsServiceRecord service, List<?> inputs) {
         Integer maxBatchSize = service.getMaxBatchSize();
         if (maxBatchSize == null || maxBatchSize <= 0) {

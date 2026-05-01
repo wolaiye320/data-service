@@ -146,6 +146,11 @@ test('服务创建、保存并展示来源字段快照', async ({ page, request 
   await expect(page).toHaveURL(/\/services\/new$/)
   await expect(page.getByText('新增数据服务')).toBeVisible()
   await expect(page.getByText('未找到该数据服务')).toHaveCount(0)
+  await expect(page.getByTestId('sql-help-trigger')).toBeVisible()
+  await page.getByTestId('sql-help-trigger').click()
+  await expect(page.getByText('SQL 编写说明')).toBeVisible()
+  await expect(page.getByText('普通说明性注释请使用')).toBeVisible()
+  await expect(page.getByText('/* */ 仅保留给 Doma 模板语法，否则会被当作参数或指令解析。')).toBeVisible()
   await fillServiceForm(page, {
     serviceCode,
     serviceName,
@@ -232,6 +237,8 @@ test('服务编辑时展示参数快照并复用已确认类型保存', async ({
   await expect(page.getByText('参数定义')).toBeVisible()
   await expect(page.getByRole('cell', { name: 'orderId' }).first()).toBeVisible()
   await expect(page.locator('.ant-select-selection-item', { hasText: 'LONG' }).first()).toBeVisible()
+  await page.getByPlaceholder('输入默认值').first().fill('2')
+  await expect(page.getByLabel('SQL 文本')).toHaveValue('select id as order_id, order_name from public.orders where id = /* orderId */2')
   await openSnapshotTab(page)
   await expandSnapshotSection(page, '参数定义')
   await expandSnapshotSection(page, '返回字段')
@@ -256,6 +263,7 @@ test('服务编辑时展示参数快照并复用已确认类型保存', async ({
   const reopenedRow = page.locator('tr', { hasText: serviceCode }).first()
   await reopenedRow.getByTestId(/service-edit-/).click()
   await expect(page).toHaveURL(/\/services\/\d+\/edit$/)
+  await expect(page.getByLabel('SQL 文本')).toHaveValue('select id as order_id, order_name from public.orders where id = /* orderId */2')
   await expect(page.getByText('参数定义')).toBeVisible()
   await expect(page.getByRole('cell', { name: 'orderId' }).first()).toBeVisible()
   await expect(page.locator('.ant-select-selection-item', { hasText: 'LONG' }).first()).toBeVisible()
@@ -359,7 +367,8 @@ test('服务预览成功并展示结果与耗时', async ({ page, request }) => 
   await expect(row).toBeVisible()
   await row.getByTestId(/service-edit-/).click()
   await expect(page).toHaveURL(/\/services\/\d+\/edit$/)
-  await page.getByPlaceholder('输入默认值').first().fill('1')
+  await page.getByPlaceholder('输入默认值').first().fill('2')
+  await expect(page.getByLabel('SQL 文本')).toHaveValue('select id as order_id, order_name from public.orders where id = /* orderId */2')
 
   const previewResponsePromise = page.waitForResponse(
     (response) => response.request().method() === 'POST' && /\/api\/admin\/services\/\d+\/preview$/.test(new URL(response.url()).pathname),
@@ -378,6 +387,9 @@ test('服务预览成功并展示结果与耗时', async ({ page, request }) => 
   if (previewBody.rows.length > 0) {
     await expect(page.getByRole('cell', { name: '1' }).first()).toBeVisible()
   }
+  await openSnapshotTab(page)
+  await expandSnapshotSection(page, '参数定义')
+  await expect(page.getByRole('cell', { name: '2' }).first()).toBeVisible()
 })
 
 test('服务预览失败与权限限制提示可见', async ({ page, request }) => {

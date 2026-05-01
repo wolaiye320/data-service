@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 管理端维护服务级缓存策略与显式清缓存入口。
+ */
 @Validated
 @RestController
 @RequestMapping("/api/admin/services/{id}/cache-policy")
@@ -27,11 +30,17 @@ public class AdminCachePolicyController {
         this.cachePolicyService = cachePolicyService;
     }
 
+    /**
+     * 查询服务缓存策略详情。
+     */
     @GetMapping
     public CachePolicyResponse detail(@PathVariable("id") Long id) {
         return cachePolicyService.detail(id);
     }
 
+    /**
+     * 新增或更新服务缓存策略。
+     */
     @PutMapping
     public CachePolicyResponse upsert(@PathVariable("id") Long id,
                                       @Valid @RequestBody CachePolicyUpsertRequest request,
@@ -39,6 +48,9 @@ public class AdminCachePolicyController {
         return cachePolicyService.upsert(id, request, operatorContext(httpServletRequest), traceId(httpServletRequest));
     }
 
+    /**
+     * 显式清理指定服务的查询缓存。
+     */
     @DeleteMapping("/cache")
     public CachePolicyService.CacheEvictResponse clearCache(@PathVariable("id") Long id,
                                                            HttpServletRequest httpServletRequest) {

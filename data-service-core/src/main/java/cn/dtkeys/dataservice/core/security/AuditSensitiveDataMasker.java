@@ -12,6 +12,9 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+/**
+ * 对审计详情和上下文中的敏感字段做结构化脱敏。
+ */
 @Component
 public class AuditSensitiveDataMasker {
 
@@ -33,6 +36,9 @@ public class AuditSensitiveDataMasker {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 尝试按 JSON 结构脱敏；若不是 JSON，则按关键字兜底模糊处理。
+     */
     public String maskStructuredText(String text) {
         if (text == null || text.isBlank()) {
             return text;

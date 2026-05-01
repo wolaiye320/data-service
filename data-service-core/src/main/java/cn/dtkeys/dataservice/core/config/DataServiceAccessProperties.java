@@ -4,6 +4,9 @@ import jakarta.validation.constraints.NotBlank;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
+/**
+ * 管理端访问控制相关请求头配置。
+ */
 @Validated
 @ConfigurationProperties(prefix = "data-service.access")
 public class DataServiceAccessProperties {

@@ -15,6 +15,9 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * 执行联邦正式查询的最小闭环，负责远端任务调度、本地 Join、残余过滤和字段投影。
+ */
 @Service
 public class FederatedQueryExecutor {
 
@@ -50,6 +53,7 @@ public class FederatedQueryExecutor {
     public FederatedQueryResult execute(DsServiceRecord service,
                                         DsServiceVersionRecord version,
                                         Map<String, Object> boundParams) {
+        // 逻辑计划和拆分计划都来自发布快照，保证正式查询与发布时确认过的语义保持一致。
         LogicalPlanService.LogicalPlanSummary logicalPlanSummary = logicalPlanService.build(
                 version.getSqlType(),
                 version.getSqlText(),
@@ -80,6 +84,8 @@ public class FederatedQueryExecutor {
             long startedAt = System.currentTimeMillis();
             Map<String, List<Map<String, Object>>> remoteRows = new LinkedHashMap<>();
             List<Map<String, Object>> taskSummaries = new ArrayList<>();
+
+            // 远端任务逐个调度，先把数据按来源别名打平到本地命名空间，再进入本地整合阶段。
             for (FederatedQuerySplitter.FederatedRemoteTask task : splitPlan.tasks()) {
                 List<Map<String, Object>> rows = executeTask(service, version, task, boundParams);
                 remoteRows.put(task.alias().toLowerCase(Locale.ROOT), rows);
@@ -90,6 +96,8 @@ public class FederatedQueryExecutor {
                         "rowCount", rows.size()
                 ));
             }
+
+            // 本地 Join 和残余过滤都要经过内存保护，防止联邦补算在应用侧失控膨胀。
             List<Map<String, Object>> mergedRows = joinRows(splitPlan, remoteRows);
             federatedLocalMemoryGuardService.validate("FEDERATED_LOCAL_JOIN", mergedRows);
             List<Map<String, Object>> filteredRows = applyResidualFilters(mergedRows, splitPlan.residualFilters(), boundParams);
@@ -130,6 +138,7 @@ public class FederatedQueryExecutor {
         PreviewQueryService.PreviewQueryResult result =
                 previewQueryService.executeBound(taskService, taskVersion, boundParams, "FEDERATED_EXECUTION");
         if (Boolean.TRUE.equals(result.diagnosticSummary().get("truncated"))) {
+            // 联邦远端结果一旦被截断，本地继续 Join 会直接破坏结果完整性，因此必须硬失败。
             throw cn.dtkeys.dataservice.core.error.ResourceProtectionException.resultRowsExceeded(
                     "FEDERATED_EXECUTION",
                     service.getMaxResultRows(),
@@ -159,6 +168,8 @@ public class FederatedQueryExecutor {
         for (int index = 1; index < tasks.size(); index++) {
             String alias = tasks.get(index).alias().toLowerCase(Locale.ROOT);
             List<Map<String, Object>> nextRows = remoteRows.getOrDefault(alias, List.of());
+
+            // 这里只接受显式 Join 条件；缺条件时不能偷偷退化成笛卡尔积或模糊匹配。
             List<FederatedQuerySplitter.JoinCondition> relevantConditions = splitPlan.joinConditions().stream()
                     .filter(condition -> condition.leftAlias().equalsIgnoreCase(alias)
                             || condition.rightAlias().equalsIgnoreCase(alias))
@@ -233,6 +244,7 @@ public class FederatedQueryExecutor {
             return true;
         }
         if (expression.toLowerCase(Locale.ROOT).contains(" or ")) {
+            // 当前最小闭环只实现了 AND 下的简单表达式，超出能力边界必须明确失败。
             throw new FederatedQueryExecutionException(
                     "联邦残余过滤执行失败",
                     List.of(new FederatedQueryExecutionException.FederatedDiagnostic(

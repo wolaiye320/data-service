@@ -13,9 +13,15 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 统一组装正式查询响应，保证单项成功、单项失败和批量元信息结构一致。
+ */
 @Service
 public class QueryResponseAssembler {
 
+    /**
+     * 组装批量查询总响应。
+     */
     public QueryResponse successResponse(DsServiceRecord service,
                                          DsServiceVersionRecord version,
                                          QueryRequestContextService.NormalizedQueryRequestContext requestContext,
@@ -50,6 +56,9 @@ public class QueryResponseAssembler {
         );
     }
 
+    /**
+     * 组装单项成功结果。
+     */
     public QueryResponse.QueryResultItem successItem(int index,
                                                      List<Map<String, Object>> rows,
                                                      long elapsedMs,
@@ -64,6 +73,9 @@ public class QueryResponseAssembler {
         );
     }
 
+    /**
+     * 把参数校验失败转换为单项失败结果。
+     */
     public QueryResponse.QueryResultItem failureItemFromParamValidation(int index,
                                                                         QueryParamValidationException ex) {
         List<QueryResponse.QueryErrorDetail> details = ex.getDiagnostics().stream()
@@ -88,6 +100,9 @@ public class QueryResponseAssembler {
         );
     }
 
+    /**
+     * 把联邦执行失败转换为单项失败结果。
+     */
     public QueryResponse.QueryResultItem failureItemFromFederatedExecution(int index,
                                                                            FederatedQueryExecutionException ex) {
         List<QueryResponse.QueryErrorDetail> details = ex.getDiagnostics().stream()
@@ -112,6 +127,9 @@ public class QueryResponseAssembler {
         );
     }
 
+    /**
+     * 把通用业务异常转换为单项失败结果。
+     */
     public QueryResponse.QueryResultItem failureItemFromBusinessException(int index,
                                                                           DataServiceException ex) {
         if (ex instanceof ResourceProtectionException resourceProtectionException) {

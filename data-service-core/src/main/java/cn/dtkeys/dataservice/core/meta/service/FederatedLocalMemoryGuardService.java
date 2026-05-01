@@ -6,6 +6,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * 限制联邦本地整合阶段的中间结果规模。
+ */
 @Service
 public class FederatedLocalMemoryGuardService {
 
@@ -15,6 +18,9 @@ public class FederatedLocalMemoryGuardService {
         this.resourceProtectionProperties = resourceProtectionProperties;
     }
 
+    /**
+     * 校验本地补算中间结果行数是否超出系统阈值。
+     */
     public void validate(String stage, List<?> rows) {
         int actualRows = rows == null ? 0 : rows.size();
         int maxRows = resourceProtectionProperties.getMaxLocalCompIntermediateRows();

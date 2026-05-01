@@ -18,6 +18,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 提供管理端审计日志的分页查询和详情脱敏查看能力。
+ */
 @Service
 public class AuditLogQueryService {
 
@@ -37,6 +40,9 @@ public class AuditLogQueryService {
         this.auditSensitiveDataMasker = auditSensitiveDataMasker;
     }
 
+    /**
+     * 按过滤条件分页查询审计日志。
+     */
     public AuditLogListResponse list(AuditLogQueryCriteria criteria) {
         int page = normalizePage(criteria.page());
         int size = normalizeSize(criteria.size());
@@ -53,6 +59,8 @@ public class AuditLogQueryService {
                 criteria.startAt(),
                 criteria.endAt()
         );
+
+        // 列表查询阶段就统一完成服务编码映射和摘要脱敏，避免前端再自行拼装展示字段。
         List<DsAuditLogRecord> records = auditLogRepository.findByFilters(
                 serviceId,
                 normalizeBlank(criteria.operator()),
@@ -71,6 +79,9 @@ public class AuditLogQueryService {
         return new AuditLogListResponse(page, size, total, items);
     }
 
+    /**
+     * 查询单条审计日志详情，并对明细 JSON 做脱敏处理。
+     */
     public AuditLogDetailResponse detail(Long id) {
         DsAuditLogRecord record = auditLogRepository.findById(id);
         if (record == null) {

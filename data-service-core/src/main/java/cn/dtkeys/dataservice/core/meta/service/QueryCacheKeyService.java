@@ -13,6 +13,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 根据服务、版本、参数和上下文规则生成稳定缓存键。
+ */
 @Service
 public class QueryCacheKeyService {
 
@@ -24,6 +27,9 @@ public class QueryCacheKeyService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 构建单次查询的缓存键快照。
+     */
     public QueryCacheKeySnapshot build(DsServiceRecord service,
                                        DsServiceVersionRecord version,
                                        Map<String, Object> params,

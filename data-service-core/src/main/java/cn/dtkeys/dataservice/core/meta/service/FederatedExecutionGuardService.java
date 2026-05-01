@@ -7,6 +7,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.concurrent.Semaphore;
 
+/**
+ * 控制联邦查询并发数量，并校验联邦执行总耗时。
+ */
 @Service
 public class FederatedExecutionGuardService {
 
@@ -18,6 +21,9 @@ public class FederatedExecutionGuardService {
         this.semaphore = new Semaphore(resourceProtectionProperties.getMaxConcurrentQueries(), true);
     }
 
+    /**
+     * 获取一次联邦执行并发许可。
+     */
     public GuardPermit acquire() {
         if (!semaphore.tryAcquire()) {
             throw ResourceProtectionException.concurrentQueriesExceeded(resourceProtectionProperties.getMaxConcurrentQueries());
@@ -25,6 +31,9 @@ public class FederatedExecutionGuardService {
         return new GuardPermit(semaphore);
     }
 
+    /**
+     * 校验联邦执行总耗时是否超出允许阈值。
+     */
     public void validateElapsed(DsServiceRecord service, long elapsedMs) {
         Integer timeoutSeconds = service.getFederatedQueryTimeoutSeconds();
         if (timeoutSeconds == null || timeoutSeconds <= 0) {

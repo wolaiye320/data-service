@@ -37,6 +37,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * 管理数据服务草稿、发布版本、预览执行与相关快照、审计的主编排服务。
+ */
 @Service
 public class ServiceDefinitionService {
 
@@ -123,6 +126,7 @@ public class ServiceDefinitionService {
     @Transactional
     public ServiceDetailResponse create(ServiceCreateRequest request, OperatorContext operatorContext, String traceId) {
         try {
+            // 创建前先做 SQL 与连接合法性校验，避免把无效草稿写入元数据。
             validateSql(request.toDefinitionRequest());
             DsServiceRecord service = new DsServiceRecord();
             service.setServiceCode(request.serviceCode());
@@ -132,6 +136,7 @@ public class ServiceDefinitionService {
             service.setDeleted(false);
             serviceRepository.insert(service);
 
+            // 首次创建必须同步生成版本 1 的草稿快照，后续发布、预览都依赖它。
             DsServiceVersionRecord draft = newDraft(service.getId(), 1, request.toDefinitionRequest(), operatorContext.operator());
             serviceVersionRepository.insert(draft);
             auditService.recordServiceEvent(
@@ -177,6 +182,8 @@ public class ServiceDefinitionService {
         DsServiceVersionRecord latestDraft = null;
         try {
             service = requireService(id);
+
+            // 编辑始终以最新草稿为承载，不能直接修改已发布版本快照。
             validateSql(request.toDefinitionRequest());
             applyDefinition(service, request.toDefinitionRequest(), operatorContext.operator());
             serviceRepository.update(service);
@@ -222,6 +229,8 @@ public class ServiceDefinitionService {
         DsServiceRecord service = null;
         try {
             service = requireService(id);
+
+            // 停用前必须先校验发布态，并同步停用服务级缓存策略，避免停用后仍命中旧缓存。
             validateDisable(service);
             boolean cachePolicyDisabled = disableCachePolicyIfPresent(id, operatorContext.operator());
             serviceRepository.updateStatus(id, request.status(), operatorContext.operator());
@@ -270,6 +279,8 @@ public class ServiceDefinitionService {
             if (draft == null) {
                 throw new ResourceConflictException(ErrorCode.SERVICE_DRAFT_NOT_FOUND, "当前服务不存在可发布的草稿版本");
             }
+
+            // 发布前要把资源限制、参数确认、快照完整性、联邦能力与表达式支持全部一次性兜住。
             validateSql(draft.getSqlType(), draft.getSqlText(), service.getDefaultConnectionCode());
             paramSnapshotService.validateConfirmed(draft.getParamSnapshotJson());
             validateDraftSnapshotsForPublish(service, draft);
@@ -290,6 +301,8 @@ public class ServiceDefinitionService {
                     expressionSupportService.validateOrThrow(draft.getSqlText(), resolveExpressionConnection(service, draft));
 
             LocalDateTime publishedAt = LocalDateTime.now();
+
+            // 校验快照和计划快照在切换发布态前写回版本记录，保证发布后查询直接消费稳定快照。
             draft.setValidationSnapshotJson(
                     publishValidationSnapshotService.build(
                             draft.getSqlType(),
@@ -362,6 +375,7 @@ public class ServiceDefinitionService {
             throw new ResourceConflictException(ErrorCode.SERVICE_DRAFT_NOT_FOUND, "当前服务不存在可预览的草稿版本");
         }
         try {
+            // 预览沿用草稿快照和资源保护配置，但不会修改正式发布态。
             previewGuardService.validate(service, draft.getSqlType(), draft.getSqlText(), readOnlySqlGuard);
             validateSql(draft.getSqlType(), draft.getSqlText(), service.getDefaultConnectionCode());
             paramSnapshotService.validateConfirmed(draft.getParamSnapshotJson());
@@ -382,6 +396,8 @@ public class ServiceDefinitionService {
                     parseResult.params().size(),
                     capabilitySummaries
             );
+
+            // 预览响应需要把请求上下文、计划快照和执行结果一并返回，方便前端定位草稿问题。
             PreviewQueryService.PreviewQueryResult previewResult = previewQueryService.execute(service, draft, request.previewParams());
             Map<String, Object> requestContext = previewRequestContext(request);
             ServicePreviewResponse response = new ServicePreviewResponse(

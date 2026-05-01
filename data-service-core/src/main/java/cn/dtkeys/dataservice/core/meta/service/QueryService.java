@@ -18,6 +18,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 统一编排已发布数据服务的正式查询执行，负责发布态校验、访问控制、参数绑定、缓存、
+ * 单源或联邦执行分发、结果保护与审计记录。
+ */
 @Service
 public class QueryService {
 
@@ -66,6 +70,9 @@ public class QueryService {
         this.auditService = auditService;
     }
 
+    /**
+     * 执行正式查询请求，并按输入顺序返回单项结果。
+     */
     public QueryResponse execute(QueryRequest request, String traceId) {
         QueryRequestContextService.NormalizedQueryRequestContext requestContext =
                 queryRequestContextService.normalize(request.requestContext(), traceId);
@@ -73,18 +80,24 @@ public class QueryService {
         DsServiceRecord service = null;
         DsServiceVersionRecord version = null;
         try {
+            // 先校验服务发布态，再阻断批量、访问与租户越权请求，避免无效请求进入执行阶段。
             service = requirePublishedService(request.serviceCode());
             version = requirePublishedVersion(service);
             queryBatchGuardService.validate(service, request.inputs());
             queryAccessGuardService.validate(requestContext);
             queryTenantGuardService.validate(service, requestContext);
+
             List<QueryResponse.QueryResultItem> items = buildItems(service, version, request.inputs(), requestContext);
             long elapsedMs = System.currentTimeMillis() - startedAt;
             QueryResponse response = queryResponseAssembler.successResponse(service, version, requestContext, items, elapsedMs);
+
+            // 审计与主链路同属正式查询闭环，成功响应返回前必须记录执行结果。
             recordQueryAudit(service, request, requestContext, response, null, elapsedMs, traceId);
             return response;
         } catch (RuntimeException ex) {
             long elapsedMs = System.currentTimeMillis() - startedAt;
+
+            // 失败路径也必须尝试落审计，避免查询异常绕过核心审计链路。
             recordQueryAudit(service, request, requestContext, null, ex, elapsedMs, traceId);
             throw ex;
         }
@@ -109,6 +122,8 @@ public class QueryService {
                     queryParamBindingService.bind(version.getParamSnapshotJson(), input == null ? Map.of() : input.params());
             QueryCacheKeyService.QueryCacheKeySnapshot cacheKeySnapshot =
                     queryCacheKeyService.build(service, version, boundParams.params(), requestContext);
+
+            // 缓存命中后仍需走结果保护校验，避免历史缓存绕过当前行数或资源限制。
             if (cacheKeySnapshot.cacheEnabled()) {
                 QueryResultCache.CacheHit cacheHit = queryResultCache.get(
                         cacheKeySnapshot.cacheKey(),
@@ -124,6 +139,8 @@ public class QueryService {
                             enrichDiagnosticSummary(cacheHit.diagnosticSummary(), cacheKeySnapshot, null, null, true)
                     );
                 }
+
+                // 联邦与单源执行器严格按发布快照的 sqlType 分流，不能在运行期混用。
                 if ("FEDERATED_SQL".equals(version.getSqlType())) {
                     FederatedQueryExecutor.FederatedQueryResult result =
                             federatedQueryExecutor.execute(service, version, boundParams.params());
@@ -152,6 +169,8 @@ public class QueryService {
                     return queryResponseAssembler.successItem(index, result.rows(), result.elapsedMs(), false, diagnosticSummary);
                 }
             }
+
+            // 缓存策略关闭时仍要保留统一的诊断字段，方便前端和审计区分未命中与未启用。
             if ("FEDERATED_SQL".equals(version.getSqlType())) {
                 FederatedQueryExecutor.FederatedQueryResult result =
                         federatedQueryExecutor.execute(service, version, boundParams.params());
@@ -248,6 +267,7 @@ public class QueryService {
                     traceId
             );
         } catch (RuntimeException auditEx) {
+            // 主链路已有业务异常时，附加审计异常即可，不能让审计覆盖掉原始失败原因。
             if (error != null) {
                 error.addSuppressed(auditEx);
                 return;

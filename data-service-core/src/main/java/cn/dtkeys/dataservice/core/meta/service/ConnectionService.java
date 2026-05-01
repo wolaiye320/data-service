@@ -23,6 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+/**
+ * 管理连接配置、状态流转、连通性测试与脱敏输出。
+ */
 @Service
 public class ConnectionService {
 
@@ -55,6 +58,7 @@ public class ConnectionService {
      */
     @Transactional
     public ConnectionDetailResponse create(ConnectionCreateRequest request, OperatorContext operatorContext, String traceId) {
+        // 入库前先做真实连通性测试，避免把明显不可用的连接写成可用配置。
         connectionTestExecutor.test(toPayload(request));
         DsConnectionRecord record = new DsConnectionRecord();
         fillRecord(record, request, operatorContext.operator());
@@ -77,6 +81,8 @@ public class ConnectionService {
     @Transactional
     public ConnectionDetailResponse update(Long id, ConnectionUpdateRequest request, OperatorContext operatorContext, String traceId) {
         DsConnectionRecord existing = requireConnection(id);
+
+        // 编辑后同样要求通过连通性测试，避免把已存在连接改成不可用状态。
         connectionTestExecutor.test(toPayload(request));
         fillRecord(existing, request, operatorContext.operator());
         existing.setId(id);
@@ -98,6 +104,7 @@ public class ConnectionService {
                                                  String traceId) {
         DsConnectionRecord existing = requireConnection(id);
         if ("DISABLED".equals(request.status())) {
+            // 已发布服务仍在引用时禁止停用连接，避免正式查询在运行期断底座。
             long referenced = publishedServiceLookupRepository.countPublishedServicesUsingConnection(existing.getConnectionCode());
             if (referenced > 0) {
                 throw new ResourceConflictException(ErrorCode.DATASOURCE_DISABLED_IN_USE, "连接已被已发布服务引用，不能停用");
@@ -116,6 +123,7 @@ public class ConnectionService {
      */
     public ConnectionTestResponse testExisting(Long id, OperatorContext operatorContext, String traceId) {
         DsConnectionRecord existing = requireConnection(id);
+        // 现有连接测试必须先解密持久化凭据，再走统一连接测试执行器。
         ConnectionPayload payload = new ConnectionTestPayload(
                 existing.getConnectionName(),
                 existing.getDbType(),
@@ -204,6 +212,7 @@ public class ConnectionService {
     }
 
     private ConnectionDetailResponse toDetailResponse(DsConnectionRecord record) {
+        // 管理端回显统一走脱敏输出，避免把真实账号、密码和主机信息直接返回前端。
         return new ConnectionDetailResponse(
                 record.getId(),
                 record.getConnectionCode(),

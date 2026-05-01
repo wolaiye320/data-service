@@ -9,9 +9,15 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 校验正式查询单项结果是否满足服务配置的结果规模上限。
+ */
 @Service
 public class QueryResultGuardService {
 
+    /**
+     * 校验结果是否被截断或超过允许返回行数。
+     */
     public void validate(DsServiceRecord service,
                          List<Map<String, Object>> rows,
                          Map<String, Object> diagnosticSummary,

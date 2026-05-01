@@ -10,9 +10,15 @@ import java.sql.DriverManager;
 import java.util.Locale;
 import java.util.Properties;
 
+/**
+ * 基于 JDBC DriverManager 直接验证数据源连通性。
+ */
 @Component
 public class JdbcConnectionTestExecutor implements ConnectionTestExecutor {
 
+    /**
+     * 按数据库类型构造 JDBC URL 并验证连接可建立。
+     */
     @Override
     public void test(ConnectionPayload payload) {
         String jdbcUrl = buildJdbcUrl(payload);

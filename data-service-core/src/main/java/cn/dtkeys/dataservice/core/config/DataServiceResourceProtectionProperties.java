@@ -5,6 +5,9 @@ import jakarta.validation.constraints.Min;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
+/**
+ * 查询执行与联邦补算相关的资源保护阈值配置。
+ */
 @Validated
 @ConfigurationProperties(prefix = "data-service.resource-protection")
 public class DataServiceResourceProtectionProperties {

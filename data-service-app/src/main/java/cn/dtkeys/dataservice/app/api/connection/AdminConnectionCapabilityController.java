@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 管理端维护单个连接的数据源能力配置。
+ */
 @Validated
 @RestController
 @RequestMapping("/api/admin/connections/{id}/capabilities")
@@ -26,11 +29,17 @@ public class AdminConnectionCapabilityController {
         this.connectionCapabilityService = connectionCapabilityService;
     }
 
+    /**
+     * 查询连接能力详情。
+     */
     @GetMapping
     public ConnectionCapabilityResponse detail(@PathVariable("id") Long id) {
         return connectionCapabilityService.detail(id);
     }
 
+    /**
+     * 新增或更新连接能力配置。
+     */
     @PutMapping
     public ConnectionCapabilityResponse upsert(@PathVariable("id") Long id,
                                                @Valid @RequestBody ConnectionCapabilityUpsertRequest request,

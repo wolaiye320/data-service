@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 
+/**
+ * 管理端审计日志查询入口。
+ */
 @Validated
 @RestController
 @RequestMapping("/api/admin/audits")
@@ -24,6 +27,9 @@ public class AdminAuditLogController {
         this.auditLogQueryService = auditLogQueryService;
     }
 
+    /**
+     * 按条件分页查询审计日志。
+     */
     @GetMapping
     public AuditLogListResponse list(@RequestParam(value = "serviceCode", required = false) String serviceCode,
                                      @RequestParam(value = "operator", required = false) String operator,
@@ -51,6 +57,9 @@ public class AdminAuditLogController {
         );
     }
 
+    /**
+     * 查询单条审计日志详情。
+     */
     @GetMapping("/{id}")
     public AuditLogDetailResponse detail(@PathVariable("id") Long id) {
         return auditLogQueryService.detail(id);

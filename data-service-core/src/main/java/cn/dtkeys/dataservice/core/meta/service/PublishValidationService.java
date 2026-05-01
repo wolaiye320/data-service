@@ -9,6 +9,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * 在服务发布前校验资源限制、联邦能力和本地补算边界。
+ */
 @Service
 public class PublishValidationService {
 
@@ -56,6 +59,8 @@ public class PublishValidationService {
         if (!"FEDERATED_SQL".equals(sqlType)) {
             return;
         }
+
+        // 联邦 SQL 发布前必须确认每个来源都有能力配置，且补算边界在资源限制内。
         validateFederatedCapabilities(sqlText, sourceSnapshotJson, maxResultRows);
     }
 

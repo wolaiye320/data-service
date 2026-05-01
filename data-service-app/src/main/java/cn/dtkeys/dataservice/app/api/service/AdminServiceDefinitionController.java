@@ -26,6 +26,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * 管理端维护数据服务定义、发布和预览入口。
+ */
 @Validated
 @RestController
 @RequestMapping("/api/admin/services")
@@ -37,6 +40,9 @@ public class AdminServiceDefinitionController {
         this.serviceDefinitionService = serviceDefinitionService;
     }
 
+    /**
+     * 新增服务草稿。
+     */
     @PostMapping
     public ResponseEntity<ServiceDetailResponse> create(@Valid @RequestBody ServiceCreateRequest request,
                                                         HttpServletRequest httpServletRequest) {
@@ -44,6 +50,9 @@ public class AdminServiceDefinitionController {
                 .body(serviceDefinitionService.create(request, operatorContext(httpServletRequest), traceId(httpServletRequest)));
     }
 
+    /**
+     * 编辑服务草稿。
+     */
     @PutMapping("/{id}")
     public ServiceDetailResponse update(@PathVariable("id") Long id,
                                         @Valid @RequestBody ServiceUpdateRequest request,
@@ -51,6 +60,9 @@ public class AdminServiceDefinitionController {
         return serviceDefinitionService.update(id, request, operatorContext(httpServletRequest), traceId(httpServletRequest));
     }
 
+    /**
+     * 停用已发布服务。
+     */
     @PutMapping("/{id}/status")
     public ServiceDetailResponse updateStatus(@PathVariable("id") Long id,
                                               @Valid @RequestBody ServiceStatusUpdateRequest request,
@@ -58,6 +70,9 @@ public class AdminServiceDefinitionController {
         return serviceDefinitionService.disable(id, request, operatorContext(httpServletRequest), traceId(httpServletRequest));
     }
 
+    /**
+     * 发布当前草稿版本。
+     */
     @PostMapping("/{id}/publish")
     public ServiceDetailResponse publish(@PathVariable("id") Long id,
                                          @Valid @RequestBody ServicePublishRequest request,
@@ -65,6 +80,9 @@ public class AdminServiceDefinitionController {
         return serviceDefinitionService.publish(id, request, operatorContext(httpServletRequest), traceId(httpServletRequest));
     }
 
+    /**
+     * 预览当前草稿版本的执行结果。
+     */
     @PostMapping("/{id}/preview")
     public ServicePreviewResponse preview(@PathVariable("id") Long id,
                                           @Valid @RequestBody ServicePreviewRequest request,
@@ -72,11 +90,17 @@ public class AdminServiceDefinitionController {
         return serviceDefinitionService.preview(id, request, operatorContext(httpServletRequest), traceId(httpServletRequest));
     }
 
+    /**
+     * 查询服务详情。
+     */
     @GetMapping("/{id}")
     public ServiceDetailResponse detail(@PathVariable("id") Long id) {
         return serviceDefinitionService.detail(id);
     }
 
+    /**
+     * 按状态过滤服务列表；不传状态时返回全部。
+     */
     @GetMapping
     public List<ServiceDetailResponse> list(@RequestParam(value = "status", required = false) String status) {
         return serviceDefinitionService.list(status);

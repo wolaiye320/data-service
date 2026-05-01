@@ -34,6 +34,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
+/**
+ * 提供单源 SQL 的受控预览执行能力，同时复用到正式查询链路中的远端单源执行。
+ */
 @Service
 public class PreviewQueryService {
 
@@ -65,6 +68,7 @@ public class PreviewQueryService {
     public PreviewQueryResult execute(DsServiceRecord service,
                                       DsServiceVersionRecord draft,
                                       Map<String, Object> previewParams) {
+        // 预览链路当前只接受最小闭环能力，避免把未实现的 Doma 复杂语法伪装成“可预览”。
         if (!"SIMPLE_SQL".equals(draft.getSqlType())) {
             throw new DataServiceException(ErrorCode.INVALID_ARGUMENT, "当前预览执行暂仅支持 SIMPLE_SQL");
         }
@@ -74,6 +78,8 @@ public class PreviewQueryService {
         DsConnectionRecord connection = requireEnabledConnection(service.getDefaultConnectionCode());
         String renderedSql = renderSql(draft.getSqlText(), draft.getParamSnapshotJson(), previewParams);
         DialectRuleService.RewriteResult rewriteResult = dialectRuleService.rewriteSql(renderedSql, connection);
+
+        // 预览执行也必须复用正式链路的只读保护，不能因为“只是预览”放宽 SQL 边界。
         readOnlySqlGuard.validate(rewriteResult.sql());
         long startedAt = System.currentTimeMillis();
         try (Connection jdbcConnection = openConnection(connection);
@@ -111,11 +117,14 @@ public class PreviewQueryService {
      * 按发布参数快照将参数转换为 JDBC 绑定值，供正式查询链路复用。
      */
     public PreviewQueryResult executeBound(DsServiceRecord service,
-                                          DsServiceVersionRecord draft,
-                                          Map<String, Object> boundParams) {
+                                           DsServiceVersionRecord draft,
+                                           Map<String, Object> boundParams) {
         return executeBound(service, draft, boundParams, "SINGLE_SOURCE_EXECUTION");
     }
 
+    /**
+     * 执行已完成绑定的单源 SQL，并按调用阶段输出统一的超时错误语义。
+     */
     public PreviewQueryResult executeBound(DsServiceRecord service,
                                            DsServiceVersionRecord draft,
                                            Map<String, Object> boundParams,
@@ -133,6 +142,7 @@ public class PreviewQueryService {
         long startedAt = System.currentTimeMillis();
         try (Connection jdbcConnection = openConnection(connection);
              PreparedStatement statement = jdbcConnection.prepareStatement(rewriteResult.sql())) {
+            // 正式查询链路必须使用参数绑定，不能回退到字符串拼接，否则会破坏参数类型和安全边界。
             bindStatement(statement, preparedSql.bindValues());
             int maxResultRows = service.getMaxResultRows();
             statement.setQueryTimeout(service.getQueryTimeoutSeconds());

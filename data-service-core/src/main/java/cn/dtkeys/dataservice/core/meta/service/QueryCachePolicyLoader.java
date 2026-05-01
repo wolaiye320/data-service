@@ -10,6 +10,9 @@ import org.springframework.stereotype.Service;
 import java.util.LinkedHashSet;
 import java.util.List;
 
+/**
+ * 读取并规范化服务级缓存策略快照。
+ */
 @Service
 public class QueryCachePolicyLoader {
 
@@ -23,6 +26,9 @@ public class QueryCachePolicyLoader {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 加载指定服务的缓存策略；不存在时返回禁用态默认快照。
+     */
     public QueryCachePolicySnapshot load(DsServiceRecord service) {
         DsCachePolicyRecord record = cachePolicyRepository.findByServiceId(service.getId());
         if (record == null) {

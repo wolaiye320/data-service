@@ -16,6 +16,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 组装正式查询与租户拒绝场景的审计详情和上下文摘要。
+ */
 @Service
 public class QueryAuditSummaryService {
 
@@ -25,6 +28,9 @@ public class QueryAuditSummaryService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 生成正式查询执行审计详情。
+     */
     public String writeExecutionDetail(DsServiceRecord service,
                                        DsServiceVersionRecord version,
                                        QueryRequest request,
@@ -60,6 +66,9 @@ public class QueryAuditSummaryService {
         return writeJson(detail, "正式查询审计详情序列化失败");
     }
 
+    /**
+     * 生成正式查询执行上下文摘要。
+     */
     public String writeExecutionContextSummary(QueryRequest request,
                                                QueryRequestContextService.NormalizedQueryRequestContext requestContext,
                                                QueryResponse response,
@@ -83,6 +92,9 @@ public class QueryAuditSummaryService {
         return writeJson(summary, "正式查询审计上下文序列化失败");
     }
 
+    /**
+     * 生成租户拒绝场景的审计详情。
+     */
     public String writeTenantDeniedDetail(String requiredTenantId,
                                           String actualTenantId,
                                           String callerId) {
@@ -93,6 +105,9 @@ public class QueryAuditSummaryService {
         return writeJson(detail, "租户校验审计详情序列化失败");
     }
 
+    /**
+     * 生成租户拒绝场景的上下文摘要。
+     */
     public String writeTenantDeniedContextSummary(String requiredTenantId,
                                                   String actualTenantId,
                                                   String callerId,

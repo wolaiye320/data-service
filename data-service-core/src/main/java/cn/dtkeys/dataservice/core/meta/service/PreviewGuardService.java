@@ -5,6 +5,9 @@ import cn.dtkeys.dataservice.core.error.ErrorCode;
 import cn.dtkeys.dataservice.core.meta.domain.DsServiceRecord;
 import org.springframework.stereotype.Service;
 
+/**
+ * 校验草稿预览执行前的只读与资源保护基线。
+ */
 @Service
 public class PreviewGuardService {
 

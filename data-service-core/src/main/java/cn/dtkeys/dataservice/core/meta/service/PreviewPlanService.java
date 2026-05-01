@@ -6,6 +6,9 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 生成预览阶段的计划快照。
+ */
 @Service
 public class PreviewPlanService {
 
@@ -34,6 +37,8 @@ public class PreviewPlanService {
             stages.add("VALIDATE_FEDERATION");
         }
         stages.add("EXECUTE_PREVIEW");
+
+        // 预览计划只描述预览阶段会发生的校验与执行步骤，不混入正式发布阶段动作。
         LogicalPlanService.LogicalPlanSummary logicalPlan =
                 logicalPlanService.build(sqlType, sqlText, sourceSnapshotJson, fieldSnapshotJson, paramCount, capabilitySummaries);
         return planSnapshotService.toJson(new PlanSnapshotService.PlanSnapshot(

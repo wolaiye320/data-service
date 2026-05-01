@@ -14,6 +14,9 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
 
+/**
+ * 使用 AES-GCM 对连接凭据进行加解密。
+ */
 @Component
 public class AesCredentialCodec implements CredentialCodec {
 
@@ -28,6 +31,9 @@ public class AesCredentialCodec implements CredentialCodec {
         this.keySpec = new SecretKeySpec(sha256(properties.getCredentialSecret()), "AES");
     }
 
+    /**
+     * 加密明文凭据。
+     */
     @Override
     public String encrypt(String plainText) {
         try {
@@ -45,6 +51,9 @@ public class AesCredentialCodec implements CredentialCodec {
         }
     }
 
+    /**
+     * 解密持久化后的凭据密文。
+     */
     @Override
     public String decrypt(String cipherText) {
         try {

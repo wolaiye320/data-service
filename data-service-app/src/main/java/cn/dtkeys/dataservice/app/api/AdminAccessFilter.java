@@ -16,6 +16,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.UUID;
 
+/**
+ * 拦截管理端接口并建立管理员身份、操作人上下文与 traceId。
+ */
 @Component
 public class AdminAccessFilter extends OncePerRequestFilter {
 
@@ -47,6 +50,7 @@ public class AdminAccessFilter extends OncePerRequestFilter {
             traceId = UUID.randomUUID().toString();
         }
         if (operator == null || operator.isBlank() || !"ADMIN".equals(role)) {
+            // 管理接口拒绝前也要落审计，避免越权访问只在日志之外“悄悄失败”。
             auditService.recordAdminAccessDenied(
                     "ADMIN_ACCESS_DENIED",
                     resolveTargetType(request.getRequestURI()),
@@ -62,6 +66,8 @@ public class AdminAccessFilter extends OncePerRequestFilter {
             writeAccessDenied(response, traceId);
             return;
         }
+
+        // 统一把操作人和 traceId 放进请求上下文，供控制器、审计和错误响应链路复用。
         request.setAttribute(AdminRequestContext.ATTRIBUTE_TRACE_ID, traceId);
         request.setAttribute(
                 AdminRequestContext.ATTRIBUTE_OPERATOR_CONTEXT,

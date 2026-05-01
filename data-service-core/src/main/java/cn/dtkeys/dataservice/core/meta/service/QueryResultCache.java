@@ -6,12 +6,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 提供进程内查询结果缓存，并记录下一次未命中的原因。
+ */
 @Service
 public class QueryResultCache {
 
     private final ConcurrentHashMap<String, CacheEntry> cache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> nextMissReasons = new ConcurrentHashMap<>();
 
+    /**
+     * 按缓存键读取缓存项，并根据 TTL 判断是否失效。
+     */
     public CacheHit get(String cacheKey, Integer ttlSeconds) {
         if (cacheKey == null || cacheKey.isBlank()) {
             return CacheHit.miss("MISS");
@@ -28,6 +34,9 @@ public class QueryResultCache {
         return CacheHit.hit(entry.rows(), entry.diagnosticSummary());
     }
 
+    /**
+     * 写入缓存项；未启用有效 TTL 时直接跳过。
+     */
     public void put(String cacheKey,
                     Integer ttlSeconds,
                     List<Map<String, Object>> rows,
@@ -43,6 +52,9 @@ public class QueryResultCache {
         nextMissReasons.remove(cacheKey);
     }
 
+    /**
+     * 按前缀清理缓存，并为下一次未命中保留原因。
+     */
     public int evictByPrefix(String cacheKeyPrefix, String missReason) {
         if (cacheKeyPrefix == null || cacheKeyPrefix.isBlank()) {
             return 0;
@@ -61,6 +73,9 @@ public class QueryResultCache {
         return removed;
     }
 
+    /**
+     * 清空所有缓存状态。
+     */
     public void clearAll() {
         cache.clear();
         nextMissReasons.clear();

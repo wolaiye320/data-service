@@ -6,6 +6,9 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 生成发布阶段的计划快照。
+ */
 @Service
 public class PublishPlanService {
 
@@ -35,6 +38,8 @@ public class PublishPlanService {
             stages.add("VALIDATE_FEDERATED_CAPABILITY");
         }
         stages.add("GENERATE_EXECUTION_PLAN");
+
+        // 发布计划要体现“生成执行计划前做过哪些校验”，供后续版本快照和诊断展示复用。
         LogicalPlanService.LogicalPlanSummary logicalPlan =
                 logicalPlanService.build(sqlType, sqlText, sourceSnapshotJson, fieldSnapshotJson, paramCount, capabilitySummaries);
         return planSnapshotService.toJson(new PlanSnapshotService.PlanSnapshot(

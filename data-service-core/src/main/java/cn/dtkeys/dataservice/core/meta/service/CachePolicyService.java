@@ -18,6 +18,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * 管理服务级缓存策略配置与显式缓存清理。
+ */
 @Service
 public class CachePolicyService {
 
@@ -44,17 +47,25 @@ public class CachePolicyService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 查询服务缓存策略详情。
+     */
     public CachePolicyResponse detail(Long serviceId) {
         DsServiceRecord service = requireService(serviceId);
         return toResponse(serviceId, queryCachePolicyLoader.load(service));
     }
 
+    /**
+     * 新增或更新服务缓存策略。
+     */
     @Transactional
     public CachePolicyResponse upsert(Long serviceId,
                                       CachePolicyUpsertRequest request,
                                       OperatorContext operatorContext,
                                       String traceId) {
         DsServiceRecord service = requireService(serviceId);
+
+        // 先保证模板和上下文字段合法，再决定新增还是更新，避免写入无法渲染的缓存策略。
         validateRequest(request);
         DsCachePolicyRecord existing = cachePolicyRepository.findByServiceId(serviceId);
         List<String> contextKeys = normalizeContextKeys(request.contextKeys());
@@ -98,6 +109,9 @@ public class CachePolicyService {
         return toResponse(serviceId, snapshot);
     }
 
+    /**
+     * 显式清理服务缓存。
+     */
     @Transactional
     public CacheEvictResponse clearCache(Long serviceId,
                                          OperatorContext operatorContext,
@@ -139,6 +153,7 @@ public class CachePolicyService {
                 && !contextKeys.isEmpty()) {
             return;
         }
+        // 只有声明了上下文字段，模板里的 {contextDigest} 才有可解释的来源。
         if ((request.cacheKeyTemplate() != null && request.cacheKeyTemplate().contains("{contextDigest}"))
                 && contextKeys.isEmpty()) {
             throw new cn.dtkeys.dataservice.core.error.DataServiceException(

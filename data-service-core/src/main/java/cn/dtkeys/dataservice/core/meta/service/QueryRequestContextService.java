@@ -6,9 +6,15 @@ import org.springframework.stereotype.Service;
 import java.util.LinkedHashSet;
 import java.util.List;
 
+/**
+ * 统一规范化正式查询请求中的上下文字段。
+ */
 @Service
 public class QueryRequestContextService {
 
+    /**
+     * 规范化调用上下文，并在缺少请求内 traceId 时回退到外部传入值。
+     */
     public NormalizedQueryRequestContext normalize(QueryRequestContext requestContext, String fallbackTraceId) {
         String tenantId = normalizeBlank(requestContext == null ? null : requestContext.tenantId());
         String callerId = normalizeBlank(requestContext == null ? null : requestContext.callerId());
