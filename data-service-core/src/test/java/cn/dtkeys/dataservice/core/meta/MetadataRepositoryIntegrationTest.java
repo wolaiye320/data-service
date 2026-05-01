@@ -18,9 +18,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.test.context.ActiveProfiles;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +36,9 @@ class MetadataRepositoryIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private DataSource dataSource;
 
     @Autowired
     private DsConnectionRepository connectionRepository;
@@ -55,14 +62,17 @@ class MetadataRepositoryIntegrationTest {
     private DsAuditLogRepository auditLogRepository;
 
     @BeforeEach
-    void cleanTables() {
+    void cleanTables() throws Exception {
         jdbcTemplate.execute("delete from ds_audit_log");
-        jdbcTemplate.execute("delete from ds_dialect_rule where connection_id is not null");
+        jdbcTemplate.execute("delete from ds_dialect_rule");
         jdbcTemplate.execute("delete from ds_source_capability");
         jdbcTemplate.execute("delete from ds_cache_policy");
         jdbcTemplate.execute("delete from ds_service_version");
         jdbcTemplate.execute("delete from ds_service");
         jdbcTemplate.execute("delete from ds_connection");
+        try (Connection connection = dataSource.getConnection()) {
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/migration/V3__seed_default_dialect_rules.sql"));
+        }
     }
 
     @Test
